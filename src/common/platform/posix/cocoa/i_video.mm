@@ -60,7 +60,9 @@
 #include "vulkan/system/vk_renderdevice.h"
 #endif
 
+#ifdef HAVE_VULKAN
 bool I_CreateVulkanSurface(VkInstance instance, VkSurfaceKHR *surface);
+#endif
 
 extern bool ToggleFullscreen;
 
@@ -378,7 +380,9 @@ public:
 
 	~CocoaVideo()
 	{
+#ifdef HAVE_VULKAN
 		m_vulkanSurface.reset();
+#endif
 		ms_window = nil;
 	}
 

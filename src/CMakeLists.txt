@@ -327,11 +327,7 @@ endif()
 
 # ZMUSIC
 
-if( MSVC )
-	find_package( ZMusic )
-else()
-	find_package( ZMusic REQUIRED )
-endif()
+find_package( ZMusic )
 
 message("Building for target architecture: ${TARGET_ARCHITECTURE}")
 
@@ -348,6 +344,10 @@ if( MSVC AND NOT ZMUSIC_FOUND )
 		link_directories( ${ZMUSIC_ROOT_PATH}/32bit )
 	endif()
 	set( ZMUSIC_FOUND TRUE )
+endif()
+
+if( NOT ZMUSIC_FOUND )
+	message(FATAL_ERROR "Could NOT find ZMusic. Install ZMusic or initialize libraries/ZMusic.")
 endif()
 
 
@@ -443,6 +443,7 @@ set( PLAT_SDL_SOURCES
 	common/platform/posix/sdl/i_main.cpp
 	common/platform/posix/sdl/i_system.cpp
 	common/platform/posix/sdl/sdlglvideo.cpp
+	common/platform/posix/sdl/sdl_x11_wminfo.cpp
 	common/platform/posix/sdl/st_start.cpp )
 set( PLAT_UNIX_SOURCES
 	common/platform/posix/unix/i_specialpaths.cpp
@@ -787,8 +788,14 @@ if (HAVE_RT)
 	set(RT_SOURCES
 		common/rendering/rt/rt_main.cpp
 		common/rendering/rt/rt_cutscene.cpp
-		common/rendering/rt/remix_launcher.cpp
+		common/rendering/rt/rt_runtime.cpp
 	)
+	if (NOT WIN32)
+		list(APPEND RT_SOURCES common/rendering/rt/rt_linux_loader.cpp)
+	endif()
+	if (WIN32)
+		list(APPEND RT_SOURCES common/rendering/rt/remix_launcher.cpp)
+	endif()
 
 	list (APPEND FASTMATH_SOURCES ${RT_SOURCES})
 endif()
@@ -1406,7 +1413,7 @@ if( NOT WIN32 AND NOT APPLE )
 		COMMAND ${CMAKE_CURRENT_BINARY_DIR}/link-make )
 	IF ("${INSTALL_RPATH}" STREQUAL "")
 		set_target_properties(zdoom PROPERTIES
-			#allow libzmusic.so.1 library in same folder as executable at runtime
+			# allow libzmusic.so.1 library in same folder as executable at runtime
 			INSTALL_RPATH "\$ORIGIN"
 			BUILD_WITH_INSTALL_RPATH ON
 		)

@@ -1,0 +1,369 @@
+--- data/textures.json
++++ data/textures.json
+@@ -96,6 +96,42 @@
+     ,   { "textureName":"PMAPD0"    ,"emissiveMult":0.2     }
+     ,   { "textureName":"PVISA0"    ,"emissiveMult":0.2     }
+     ,   { "textureName":"SOULA0"    ,"emissiveMult":0.2     }
++    ,   { "textureName":"SPMPA0"    ,"emissiveMult":0.2     }
++    ,   { "textureName":"INVSA0"    ,"emissiveMult":0.2     }
++    ,   { "textureName":"PWBKA0"    ,"emissiveMult":0.2     }
++    ,   { "textureName":"FBMBE0"    ,"emissiveMult":0.15     }
++    ,   { "textureName":"SHLDA0"    ,"emissiveMult":0.15     }
++    ,   { "textureName":"SHD2A0"    ,"emissiveMult":0.2     }
++    ,   { "textureName":"AKYYA0"    ,"emissiveMult":0.4     }
++    ,   { "textureName":"BKYYA0"    ,"emissiveMult":0.4     }
++    ,   { "textureName":"CKYYA0"    ,"emissiveMult":0.4     }
++    ,   { "textureName":"KGZBA0"    ,"emissiveMult":0.35     }
++    ,   { "textureName":"KGZGA0"    ,"emissiveMult":0.35     }
++    ,   { "textureName":"KGZYA0"    ,"emissiveMult":0.35     }
++    ,   { "textureName":"AMG1A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":120  ,"lightColorHEX":"ffff00" }
++    ,   { "textureName":"AMG2A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"ffff00" }
++    ,   { "textureName":"AMG2B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"ffff00" }
++    ,   { "textureName":"AMG2C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"ffff00" }
++    ,   { "textureName":"AMC1A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":180  ,"lightColorHEX":"00ff00" }
++    ,   { "textureName":"AMC2A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"00ff00" }
++    ,   { "textureName":"AMC2B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"00ff00" }
++    ,   { "textureName":"AMC2C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"00ff00" }
++    ,   { "textureName":"AMB1A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":120  ,"lightColorHEX":"0000ff" }
++    ,   { "textureName":"AMB1B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":120  ,"lightColorHEX":"0000ff" }
++    ,   { "textureName":"AMB1C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":120  ,"lightColorHEX":"0000ff" }
++    ,   { "textureName":"AMB2A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"0000ff" }
++    ,   { "textureName":"AMB2B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"0000ff" }
++    ,   { "textureName":"AMB2C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"0000ff" }
++    ,   { "textureName":"AMS1A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":120  ,"lightColorHEX":"ff0000" }
++    ,   { "textureName":"AMS1B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":120  ,"lightColorHEX":"ff0000" }
++    ,   { "textureName":"AMS2A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"ff0000" }
++    ,   { "textureName":"AMS2B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"ff0000" }
++    ,   { "textureName":"AMP1A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":120  ,"lightColorHEX":"ff9900" }
++    ,   { "textureName":"AMP1B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":120  ,"lightColorHEX":"ff9900" }
++    ,   { "textureName":"AMP1C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":120  ,"lightColorHEX":"ff9900" }
++    ,   { "textureName":"AMP2A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"ff9900" }
++    ,   { "textureName":"AMP2B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"ff9900" }
++    ,   { "textureName":"AMP2C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":240  ,"lightColorHEX":"ff9900" }
+     ,   { "textureName":"BKEYB0"    ,"emissiveMult":0.5     }
+     ,   { "textureName":"RKEYB0"    ,"emissiveMult":0.5     }
+     ,   { "textureName":"YKEYB0"    ,"emissiveMult":0.5     }
+@@ -116,6 +152,28 @@
+     ,   { "textureName":"PLSFB0"    ,"emissiveMult":1.0     }
+     ,   { "textureName":"SHTFA0"    ,"emissiveMult":1.0     }
+     ,   { "textureName":"SHTFB0"    ,"emissiveMult":1.0     }
++    ,   { "textureName":"GWNDC0"    ,"emissiveMult":0.8     }
++    ,   { "textureName":"GWNDD0"    ,"emissiveMult":0.6     }
++    ,   { "textureName":"CRBWD0"    ,"emissiveMult":0.8     }
++    ,   { "textureName":"CRBWE0"    ,"emissiveMult":0.5     }
++    ,   { "textureName":"CRBWF0"    ,"emissiveMult":0.5     }
++    ,   { "textureName":"CRBWG0"    ,"emissiveMult":0.5     }
++    ,   { "textureName":"CRBWH0"    ,"emissiveMult":0.5     }
++    ,   { "textureName":"BLSRD0"    ,"emissiveMult":0.8     }
++    ,   { "textureName":"PHNXC0"    ,"emissiveMult":0.8     }
++    ,   { "textureName":"MACEB0"    ,"emissiveMult":0.5     }
++    ,   { "textureName":"MACEC0"    ,"emissiveMult":0.5     }
++    ,   { "textureName":"MACED0"    ,"emissiveMult":0.6     }
++    ,   { "textureName":"MACEE0"    ,"emissiveMult":0.5     }
++    ,   { "textureName":"MACEF0"    ,"emissiveMult":0.5     }
++    ,   { "textureName":"HRODA0"    ,"emissiveMult":0.7     }
++    ,   { "textureName":"HRODG0"    ,"emissiveMult":0.8     }
++    ,   { "textureName":"GAUND0"    ,"emissiveMult":0.5     }
++    ,   { "textureName":"GAUNE0"    ,"emissiveMult":0.5     }
++    ,   { "textureName":"GAUNF0"    ,"emissiveMult":0.5     }
++    ,   { "textureName":"GAUNL0"    ,"emissiveMult":0.7     }
++    ,   { "textureName":"GAUNM0"    ,"emissiveMult":0.7     }
++    ,   { "textureName":"GAUNN0"    ,"emissiveMult":0.7     }
+ 
+     // lost soul, no attack
+     ,   { "textureName":"SKULA1"    ,"emissiveMult":0.1     }
+@@ -145,6 +203,270 @@
+ 
+     ,   { "textureName":"PUFFA0"    ,"emissiveMult":0.8     }
+     ,   { "textureName":"PUFFB0"    ,"emissiveMult":0.8     }
++    ,   { "textureName":"PUF1D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"9b86ff" }
++    ,   { "textureName":"PUF1H0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"b2a0ff" }
++    ,   { "textureName":"PUF2E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"PUF4F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"ffdd85" }
++    ,   { "textureName":"PUF3A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"ffdd85" }
++    ,   { "textureName":"FX01H0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"FX03J0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"aaff80" }
++    ,   { "textureName":"FX02J0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"dddd88" }
++    ,   { "textureName":"FX17G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"FX18S0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX00M0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX04A0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1200  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"FX08H0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"FX09K0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX22F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ff4040" }
++    ,   { "textureName":"XPL1F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX10A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"cc8054" }
++    ,   { "textureName":"FX10B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"cc8054" }
++    ,   { "textureName":"FX10C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"cc8054" }
++    ,   { "textureName":"FX10D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"cc8054" }
++    ,   { "textureName":"FX10E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"cc8054" }
++    ,   { "textureName":"FX10F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"996644" }
++    ,   { "textureName":"FX10G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"4c1900" }
++    ,   { "textureName":"FX15A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"ffff80" }
++    ,   { "textureName":"FX15B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"ffff80" }
++    ,   { "textureName":"FX15C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"ffff80" }
++    ,   { "textureName":"FX15D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"b3b359" }
++    ,   { "textureName":"FX15E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"666633" }
++    ,   { "textureName":"FX15F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"33331a" }
++    ,   { "textureName":"SPAXA0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"66ff66" }
++    ,   { "textureName":"SPAXB0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"66ff66" }
++    ,   { "textureName":"SPAXC0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"66ff66" }
++    ,   { "textureName":"SPAXD0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":850  ,"lightColorHEX":"4db34d" }
++    ,   { "textureName":"SPAXE0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"336633" }
++    ,   { "textureName":"SPAXF0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"003300" }
++    ,   { "textureName":"RAXEA0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"RAXEB0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"RAXEC0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":850  ,"lightColorHEX":"b34d4d" }
++    ,   { "textureName":"RAXED0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"663333" }
++    ,   { "textureName":"RAXEE0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"331a1a" }
++    ,   { "textureName":"FX11A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"ff80ff" }
++    ,   { "textureName":"FX11B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"ff80ff" }
++    ,   { "textureName":"FX11C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"ff80ff" }
++    ,   { "textureName":"FX11D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"ff80ff" }
++    ,   { "textureName":"FX11E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"ff80ff" }
++    ,   { "textureName":"FX11F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":400  ,"lightColorHEX":"b34db3" }
++    ,   { "textureName":"FX11G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":250  ,"lightColorHEX":"4c2b4c" }
++    ,   { "textureName":"LICHD0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"ff6600" }
++    ,   { "textureName":"LICHE0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"ffb300" }
++    ,   { "textureName":"LICHF0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"cc6600" }
++    ,   { "textureName":"LICHG0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"660000" }
++    ,   { "textureName":"FX05A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6666ff" }
++    ,   { "textureName":"FX05B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6666ff" }
++    ,   { "textureName":"FX05C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6666ff" }
++    ,   { "textureName":"FX05D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"6666ff" }
++    ,   { "textureName":"FX05E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"3333b3" }
++    ,   { "textureName":"FX05F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":850  ,"lightColorHEX":"1a1a66" }
++    ,   { "textureName":"FX05G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"000033" }
++    ,   { "textureName":"FX05H0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"000080" }
++    ,   { "textureName":"FX05I0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"000080" }
++    ,   { "textureName":"FX05J0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"000080" }
++    ,   { "textureName":"FX06A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ffb366" }
++    ,   { "textureName":"FX06B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ffb366" }
++    ,   { "textureName":"FX06C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ffb366" }
++    ,   { "textureName":"FX06D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"e6664d" }
++    ,   { "textureName":"FX06E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"b31a33" }
++    ,   { "textureName":"FX06F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":750  ,"lightColorHEX":"661a1a" }
++    ,   { "textureName":"FX06G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"330000" }
++    ,   { "textureName":"CLNKK0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ffcc00" }
++    ,   { "textureName":"CLNKL0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"ff9900" }
++    ,   { "textureName":"CLNKM0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"994d00" }
++    ,   { "textureName":"CLNKN0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":850  ,"lightColorHEX":"4d0000" }
++    ,   { "textureName":"BEASI1"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":950  ,"lightColorHEX":"ffb300" }
++    ,   { "textureName":"BEASI2I8"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":950  ,"lightColorHEX":"ffb300" }
++    ,   { "textureName":"BEASI3I7"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":950  ,"lightColorHEX":"ffb300" }
++    ,   { "textureName":"FRB1A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff804d" }
++    ,   { "textureName":"FRB1B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff804d" }
++    ,   { "textureName":"FRB1C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff804d" }
++    ,   { "textureName":"FRB1D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"cc663d" }
++    ,   { "textureName":"FRB1E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":750  ,"lightColorHEX":"994d33" }
++    ,   { "textureName":"FRB1F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"66331a" }
++    ,   { "textureName":"FRB1G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"330000" }
++    ,   { "textureName":"SNFXA0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"804dff" }
++    ,   { "textureName":"SNFXB0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"804dff" }
++    ,   { "textureName":"SNFXC0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"804dff" }
++    ,   { "textureName":"SNFXD0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"804dff" }
++    ,   { "textureName":"SNFXE0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"804dff" }
++    ,   { "textureName":"SNFXF0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"6633b3" }
++    ,   { "textureName":"SNFXG0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"4d1a80" }
++    ,   { "textureName":"SNFXH0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"4d004d" }
++    ,   { "textureName":"SNFXJ0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"SNFXK0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"SNFXL0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"SNFXM0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"994d40" }
++    ,   { "textureName":"SNFXN0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"4d1a1a" }
++    ,   { "textureName":"FX12A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"FX12B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"FX12C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"cc9966" }
++    ,   { "textureName":"FX12D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"cc664d" }
++    ,   { "textureName":"FX12E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"994d33" }
++    ,   { "textureName":"FX12F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"994d33" }
++    ,   { "textureName":"FX12G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"661900" }
++    ,   { "textureName":"FX12H0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":650  ,"lightColorHEX":"661900" }
++    ,   { "textureName":"FX13B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"FX13C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"FX13D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"FX13E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"FX13F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"FX13G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"FX13H0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"FX13I0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"FX13J0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"FX13K0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"b3664d" }
++    ,   { "textureName":"FX13L0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1200  ,"lightColorHEX":"804d1a" }
++    ,   { "textureName":"FX13M0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"330000" }
++    ,   { "textureName":"FX14A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"fff280" }
++    ,   { "textureName":"FX14B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"fff280" }
++    ,   { "textureName":"FX14C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"fff280" }
++    ,   { "textureName":"FX14D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"fff280" }
++    ,   { "textureName":"FX14E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1200  ,"lightColorHEX":"cccc66" }
++    ,   { "textureName":"FX14F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1400  ,"lightColorHEX":"808040" }
++    ,   { "textureName":"FX14G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1500  ,"lightColorHEX":"33331a" }
++    ,   { "textureName":"FX14H0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1500  ,"lightColorHEX":"33331a" }
++    ,   { "textureName":"FX16A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"FX16B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"FX16C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"FX16G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"FX16H0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"6666cc" }
++    ,   { "textureName":"FX16I0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1400  ,"lightColorHEX":"4d4d99" }
++    ,   { "textureName":"FX16J0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"333366" }
++    ,   { "textureName":"FX16K0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"1a1a33" }
++    ,   { "textureName":"FX16L0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"1a1a33" }
++    ,   { "textureName":"SOR2R1"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2R2"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2R3"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2R4"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2R5"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2R6"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2R7"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2R8"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2S1"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2S2"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2S3"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2S4"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2S5"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2S6"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2S7"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2S8"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2T1"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2T2"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2T3"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2T4"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2T5"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2T6"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2T7"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"SOR2T8"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"4d4dff" }
++    ,   { "textureName":"PPODC0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"00ff00" }
++    ,   { "textureName":"PPODD0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1100  ,"lightColorHEX":"00b300" }
++    ,   { "textureName":"PPODE0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1200  ,"lightColorHEX":"006600" }
++    ,   { "textureName":"PPODF0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"003300" }
++    ,   { "textureName":"VFBLA0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"VFBLB0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffb380" }
++    ,   { "textureName":"VTFBA0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ff8000" }
++    ,   { "textureName":"VTFBB0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ff8000" }
++    ,   { "textureName":"KGZ1A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"bbbbff" }
++    ,   { "textureName":"TELEA0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"6666ff" }
++    ,   { "textureName":"TELEB0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"6666ff" }
++    ,   { "textureName":"TELEC0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":350  ,"lightColorHEX":"6666ff" }
++    ,   { "textureName":"TELED0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"TELEE0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"TELEF0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"TELEG0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"TELEH0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"XPL1E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"XPL1D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"XPL1C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"XPL1B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"XPL1A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX22E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ff4040" }
++    ,   { "textureName":"FX22D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ff4040" }
++    ,   { "textureName":"FX22C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ff4040" }
++    ,   { "textureName":"FX22B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ff4040" }
++    ,   { "textureName":"FX22A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ff4040" }
++    ,   { "textureName":"FX09J0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX09I0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX09H0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX09G0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX09F0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX09E0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX09D0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX09C0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX09B0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX09A0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ff8844" }
++    ,   { "textureName":"FX08G0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"FX08F0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"FX08E0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"FX08D0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"FX08C0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"FX08B0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"FX08A0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1300  ,"lightColorHEX":"ff9966" }
++    ,   { "textureName":"FX00L0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX00K0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX00J0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX00I0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX00H0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX00G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX00F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX00E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX00D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX00C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX00B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX00A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"ff8080" }
++    ,   { "textureName":"FX18R0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX18Q0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX18P0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX18O0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX18N0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX18M0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX18L0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX18K0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX18J0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX18I0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX18H0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"6060ff" }
++    ,   { "textureName":"FX17F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"FX17E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"FX17D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"FX17C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"FX17B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"FX17A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"8080ff" }
++    ,   { "textureName":"FX02I0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"dddd88" }
++    ,   { "textureName":"FX02H0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"dddd88" }
++    ,   { "textureName":"FX02G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"dddd88" }
++    ,   { "textureName":"FX02F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"dddd88" }
++    ,   { "textureName":"FX03I0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"aaff80" }
++    ,   { "textureName":"FX03H0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"aaff80" }
++    ,   { "textureName":"FX03G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"aaff80" }
++    ,   { "textureName":"FX03F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"aaff80" }
++    ,   { "textureName":"FX03E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"aaff80" }
++    ,   { "textureName":"FX03D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"aaff80" }
++    ,   { "textureName":"FX03C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"aaff80" }
++    ,   { "textureName":"FX03B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"aaff80" }
++    ,   { "textureName":"FX03A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":900  ,"lightColorHEX":"aaff80" }
++    ,   { "textureName":"FX01G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"FX01F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"FX01E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"FX01D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"FX01C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"FX01B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"FX01A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"PUF4E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"ffdd85" }
++    ,   { "textureName":"PUF4D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"ffdd85" }
++    ,   { "textureName":"PUF4C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"ffdd85" }
++    ,   { "textureName":"PUF4B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"ffdd85" }
++    ,   { "textureName":"PUF4A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"ffdd85" }
++    ,   { "textureName":"PUF2D0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"PUF2C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"PUF2B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"PUF2A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":450  ,"lightColorHEX":"e6e680" }
++    ,   { "textureName":"PUF1G0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"b2a0ff" }
++    ,   { "textureName":"PUF1F0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"b2a0ff" }
++    ,   { "textureName":"PUF1E0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":600  ,"lightColorHEX":"b2a0ff" }
++    ,   { "textureName":"PUF1C0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"9b86ff" }
++    ,   { "textureName":"PUF1B0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"9b86ff" }
++    ,   { "textureName":"PUF1A0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"9b86ff" }
+ 
+     // switches
+     ,   { "textureName":"SW1S0"     ,"emissiveMult":0.1     }
+@@ -380,6 +702,23 @@
+     ,   { "textureName":"SMRTB0"    ,"emissiveMult":0.2     }
+     ,   { "textureName":"SMRTC0"    ,"emissiveMult":0.2     }
+     ,   { "textureName":"SMRTD0"    ,"emissiveMult":0.2     }
++    ,   { "textureName":"CHDLA0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"fff06a" }
++    ,   { "textureName":"CHDLB0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"fff06a" }
++    ,   { "textureName":"CHDLC0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":700  ,"lightColorHEX":"fff06a" }
++    ,   { "textureName":"KFR1A0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"KFR1B0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"KFR1C0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"KFR1D0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"KFR1E0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"KFR1F0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"KFR1G0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"KFR1H0"    ,"emissiveMult":0.25     ,"noShadow":true  ,"lightIntensity":1000  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"SRTCA0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"SRTCB0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"SRTCC0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":800  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"WTRHA0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"WTRHB0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"ffcc45" }
++    ,   { "textureName":"WTRHC0"    ,"emissiveMult":0.2     ,"noShadow":true  ,"lightIntensity":500  ,"lightColorHEX":"ffcc45" }
+     // spidermind
+     ,   { "textureName":"SPIDH1"    ,"emissiveMult":0.2     }
+     ,   { "textureName":"SPIDH2H8"  ,"emissiveMult":0.2     }

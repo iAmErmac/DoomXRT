@@ -249,6 +249,7 @@ void HWDrawInfo::UnclipSubsector(subsector_t *sub)
 	}
 }
 
+#if HAVE_RT
 static bool RT_CanOmitUploadOfStaticExportable( const seg_t* seg )
 {
 	if( cvar::rt_decals )
@@ -270,6 +271,7 @@ static bool RT_CanOmitUploadOfStaticExportable( const seg_t* seg )
 	}
 	return true;
 }
+#endif
 
 //==========================================================================
 //

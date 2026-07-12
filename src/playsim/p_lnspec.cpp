@@ -583,7 +583,6 @@ FUNC(LS_Floor_Stop)
 	return Level->EV_StopFloor(arg0, ln);
 }
 
-#if HAVE_RT
 bool stairs_isstairs( int special )
 {
 	switch( special )
@@ -620,7 +619,6 @@ int stairs_usespecials( int special )
 		default: assert( 0 ); return 0;
 	}
 }
-#endif
 
 
 FUNC(LS_Stairs_BuildDown)

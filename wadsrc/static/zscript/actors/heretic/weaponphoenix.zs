@@ -32,8 +32,10 @@ class PhoenixRod : Weapon
 		Loop;
 	Fire:
 		PHNX B 5;
+		PHNX C 0 A_Light2;
 		PHNX C 7 A_FirePhoenixPL1;
 		PHNX DB 4;
+		PHNX B 0 A_Light0;
 		PHNX B 0 A_ReFire;
 		Goto Ready;
 	}
@@ -83,9 +85,11 @@ class PhoenixRodPowered : PhoenixRod
 	Fire:
 		PHNX B 3 A_InitPhoenixPL2;
 	Hold:
+		PHNX C 0 A_Light2;
 		PHNX C 1 A_FirePhoenixPL2;
 		PHNX B 4 A_ReFire;
 	Powerdown:
+		PHNX B 0 A_Light0;
 		PHNX B 4 A_ShutdownPhoenixPL2;
 		Goto Ready;
 	}

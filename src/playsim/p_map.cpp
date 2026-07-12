@@ -99,7 +99,12 @@ CVAR(Int, sv_smartaim, 0, CVAR_ARCHIVE | CVAR_SERVERINFO)
 CVAR(Bool, cl_doautoaim, false, CVAR_ARCHIVE)
 
 #if HAVE_RT
-CVARD( Int, rt_blood_repl, 0, CVAR_ARCHIVE, "0: disable gzdoom blood decal and spawn fluid at its place.  1: fluid and decal.  2: only decal (gzdoom default).  Requires cl_bloodsplats=1" )
+#ifdef _WIN32
+static constexpr int RT_BLOOD_REPL_DEFAULT = 0;
+#else
+static constexpr int RT_BLOOD_REPL_DEFAULT = 2;
+#endif
+CVARD( Int, rt_blood_repl, RT_BLOOD_REPL_DEFAULT, CVAR_ARCHIVE, "0: disable gzdoom blood decal and spawn fluid at its place.  1: fluid and decal.  2: only decal (gzdoom default).  Requires cl_bloodsplats=1" )
 #endif
 
 static void CheckForPushSpecial(line_t *line, int side, AActor *mobj, DVector2 * posforwindowcheck = NULL);

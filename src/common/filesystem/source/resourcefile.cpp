@@ -34,6 +34,8 @@
 **
 */
 
+#include <algorithm>
+
 #include <miniz.h>
 #include "resourcefile.h"
 #include "md5.hpp"

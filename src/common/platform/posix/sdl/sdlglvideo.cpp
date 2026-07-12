@@ -48,6 +48,10 @@
 #include "gl_sysfb.h"
 #include "gl_system.h"
 
+#if HAVE_RT
+#include "../../../rendering/rt/rt_video.h"
+#endif
+
 #include "gl_renderer.h"
 #include "gl_framebuffer.h"
 #ifdef HAVE_GLES2
@@ -76,6 +80,13 @@
 
 // EXTERNAL DATA DECLARATIONS ----------------------------------------------
 extern IVideo *Video;
+#if HAVE_RT
+bool I_GetSDLX11WindowInfo(SDL_Window* window,
+						   void** display,
+						   unsigned long* xwindow,
+						   char* error,
+						   size_t errorSize);
+#endif
 
 EXTERN_CVAR (Int, vid_adapter)
 EXTERN_CVAR (Int, vid_displaybits)
@@ -268,12 +279,40 @@ SDLVideo::~SDLVideo ()
 #ifdef HAVE_VULKAN
 	surface.reset();
 #endif
+#if HAVE_RT
+	RT_Shutdown();
+	if (Priv::window != nullptr)
+	{
+		Priv::DestroyWindow();
+	}
+#endif
 }
 
 DFrameBuffer *SDLVideo::CreateFrameBuffer ()
 {
 	SystemBaseFrameBuffer *fb = nullptr;
 
+#if HAVE_RT
+	if (Priv::window == nullptr)
+	{
+		Priv::CreateWindow(SDL_WINDOW_HIDDEN | (vid_fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
+	}
+	if (Priv::window == nullptr)
+	{
+		I_FatalError("Could not create RT window:\n%s\n", SDL_GetError());
+	}
+
+	void* display = nullptr;
+	unsigned long xwindow = 0;
+	char wmError[256] = {};
+	if (!I_GetSDLX11WindowInfo(Priv::window, &display, &xwindow, wmError, sizeof(wmError)))
+	{
+		I_FatalError("Could not query RT window system info:\n%s\n", wmError);
+	}
+
+	RT_InitXlibSurface(display, xwindow);
+	return RT_CreateFrameBuffer(nullptr, vid_fullscreen);
+#else
 	// first try Vulkan, if that fails OpenGL
 #ifdef HAVE_VULKAN
 	if (Priv::vulkanEnabled)
@@ -323,6 +362,7 @@ DFrameBuffer *SDLVideo::CreateFrameBuffer ()
 	}
 
 	return fb;
+#endif
 }
 
 
@@ -348,11 +388,16 @@ int SystemBaseFrameBuffer::GetClientWidth()
 {
 	int width = 0;
 
-
 #ifdef HAVE_VULKAN
-	assert(Priv::vulkanEnabled);
-	SDL_Vulkan_GetDrawableSize(Priv::window, &width, nullptr);
+	if (Priv::vulkanEnabled)
+	{
+		SDL_Vulkan_GetDrawableSize(Priv::window, &width, nullptr);
+	}
+	else
 #endif
+	{
+		SDL_GetWindowSize(Priv::window, &width, nullptr);
+	}
 
 	return width;
 }
@@ -362,9 +407,15 @@ int SystemBaseFrameBuffer::GetClientHeight()
 	int height = 0;
 
 #ifdef HAVE_VULKAN
-	assert(Priv::vulkanEnabled);
-	SDL_Vulkan_GetDrawableSize(Priv::window, nullptr, &height);
+	if (Priv::vulkanEnabled)
+	{
+		SDL_Vulkan_GetDrawableSize(Priv::window, nullptr, &height);
+	}
+	else
 #endif
+	{
+		SDL_GetWindowSize(Priv::window, nullptr, &height);
+	}
 
 	return height;
 }

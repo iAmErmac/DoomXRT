@@ -2,12 +2,18 @@
     #define NOMINMAX
 #endif
 
-#include "i_mainwindow.h"
+#ifdef _WIN32
+    #include "i_mainwindow.h"
+    #include "win32rtvideo.h"
+#endif
 #include "i_time.h"
 #include "m_argv.h"
-#include "win32rtvideo.h"
 
-#include "base_sysfb.h"
+#ifdef _WIN32
+    #include "base_sysfb.h"
+#else
+    #include "gl_sysfb.h"
+#endif
 #include "c_dispatch.h"
 #include "hw_renderstate.h"
 #include "g_levellocals.h"
@@ -21,16 +27,26 @@
 #include "i_modelvertexbuffer.h"
 #include "p_lnspec.h"
 #include "image.h"
+#include "filesystem.h"
 
 #include "rt_state.h"
+#include "rt_video.h"
+#ifndef _WIN32
+    #include "rt_linux_loader.h"
+#endif
 
-#include <shellapi.h>
+#ifdef _WIN32
+    #include <shellapi.h>
+#endif
 
 #include <filesystem>
 #include <span>
 #include <variant>
 #include <ranges>
 #include <unordered_set>
+#include <cstdlib>
+#include <cstdio>
+#include <cctype>
 
 
 //
@@ -40,7 +56,9 @@
 //
 //
 
-#define RG_USE_SURFACE_WIN32
+#ifdef _WIN32
+    #define RG_USE_SURFACE_WIN32
+#endif
 #include <RTGL1/RTGL1.h>
 
 RgInterface rt      = {};
@@ -84,7 +102,7 @@ constexpr ECVarType ValueToCVarType =
     MSVC_VSEG FCVarDecl const *const cvardeclref_##name GCC_VSEG = &cvardecl_##name;
 
 #define RT_CVAR_COLOR( name, default_value, description ) \
-    CVARD( Color, ##name, default_value, CVAR_GLOBALCONFIG | CVAR_ARCHIVE, description )
+    CVARD( Color, name, default_value, CVAR_GLOBALCONFIG | CVAR_ARCHIVE, description )
 // clang-format on
 
 
@@ -99,6 +117,7 @@ namespace cvar
     RT_CVAR( rt_autoexport,             true,   "if true: if map's gltf doesn't exist on disk, export to gltf "
                                                 "and process the map as if it's static (which improves performance / stability)" )
     RT_CVAR( rt_autoexport_light,       200.f,  "On auto export to gltf, apply this multiplier to the sector light intensities" ) 
+    RT_CVAR( rt_static_ignore_polyobjects, true, "ignore external static scenes on maps with polyobjects, so moving walls and doors stay in live geometry" )
 
     RT_CVAR( rt_classic,                0.f,    "[0.0,1.0] what portion of the screen to render with a classic mode" )
     RT_CVAR( rt_classic_mus,            true,   "if true, apply high pass filter to music when classic mode is enabled" )
@@ -113,7 +132,11 @@ namespace cvar
     RT_CVAR( rt_vsync,                  false,  "vertical synchronization to prevent tearing" )
     RT_CVAR( rt_hdr,                    false,  "enable HDR output for display" )
 
+#ifdef _WIN32
     RT_CVAR( rt_fluid,                  true,   "enable fluid simulation (blood)" )
+#else
+    RT_CVAR( rt_fluid,                  false,  "enable fluid simulation (blood)" )
+#endif
     RT_CVAR( rt_fluid_budget,         100000,   "(APPLIED ONLY after disabling rt_fluid) fluid simulation particle budget " )
     RT_CVAR( rt_fluid_pradius,          0.1f,   "(APPLIED ONLY after disabling rt_fluid) radis of one particle (in meters) for fluid simulation" )
     RT_CVAR( rt_fluid_gravity_x,        0.f,    "gravity vector for fluid (horizontal, X), in m/s^2" )
@@ -282,7 +305,11 @@ int         rt_cullmode              = 2; // 0 -- balanced,  1 -- original gzdoo
 extern float RT_CutsceneTime();
 extern void  RT_ForceIntroCutsceneMusicStop();
 
+#ifdef _WIN32
 extern void RT_CloseLauncherWindow();
+#else
+void RT_CloseLauncherWindow() {}
+#endif
 
 auto RT_MakeUpRightForwardVectors( const DRotator& rotation ) -> std::tuple< RgFloat3D, RgFloat3D, RgFloat3D >;
 
@@ -324,6 +351,54 @@ constexpr uint64_t MuzzleFlashLightId = 0xFFFFFFF + 2;
 constexpr uint64_t SectorLightId_Base = 0xFFFFFFF + 3;
 
 
+void RT_AppendMapNamePart( char* dst, size_t& pos, size_t capacity, const char* src )
+{
+    if( capacity == 0 )
+    {
+        return;
+    }
+
+    for( ; src && *src && pos < capacity - 1; src++ )
+    {
+        unsigned char c = static_cast< unsigned char >( *src );
+        if( std::isalnum( c ) )
+        {
+            dst[ pos++ ] = static_cast< char >( std::tolower( c ) );
+        }
+        else if( pos > 0 && dst[ pos - 1 ] != '_' )
+        {
+            dst[ pos++ ] = '_';
+        }
+    }
+}
+
+void RT_AppendMapMd5( char* dst, size_t& pos, size_t capacity, const uint8_t md5[ 16 ] )
+{
+    constexpr char hex[] = "0123456789abcdef";
+
+    for( size_t i = 0; i < 16 && pos + 2 < capacity; i++ )
+    {
+        dst[ pos++ ] = hex[ md5[ i ] >> 4 ];
+        dst[ pos++ ] = hex[ md5[ i ] & 0x0F ];
+    }
+}
+
+bool RT_StaticSceneExists( const char* name )
+{
+    if( !name || name[ 0 ] == '\0' )
+    {
+        return false;
+    }
+
+    std::filesystem::path path = RT_ResolveRuntimePath();
+    path /= "scenes";
+    path /= name;
+    path /= std::string( name ) + ".gltf";
+
+    std::error_code ec;
+    return std::filesystem::is_regular_file( path, ec );
+}
+
 
 const char* RT_GetMapName()
 {
@@ -334,13 +409,41 @@ const char* RT_GetMapName()
 
     if( primaryLevel && !primaryLevel->MapName.IsEmpty() )
     {
-        static char mapname_lower[ 128 ];
+        static char legacy_mapname_lower[ 64 ];
+        static char mapname_lower[ 256 ];
+
+        size_t legacy_i = 0;
+        RT_AppendMapNamePart(
+            legacy_mapname_lower, legacy_i, std::size( legacy_mapname_lower ), primaryLevel->MapName.GetChars() );
+        legacy_mapname_lower[ std::min( legacy_i, std::size( legacy_mapname_lower ) - 1 ) ] = '\0';
+
+        if( RT_StaticSceneExists( legacy_mapname_lower ) )
+        {
+            return legacy_mapname_lower;
+        }
 
         size_t i = 0;
-        for( ; i < primaryLevel->MapName.Len() && i < std::size( mapname_lower ) - 1; i++ )
+        const int wadnum =
+            primaryLevel->lumpnum >= 0 ? fileSystem.GetFileContainer( primaryLevel->lumpnum ) : -1;
+        if( wadnum >= 0 )
         {
-            mapname_lower[ i ] = std::tolower( primaryLevel->MapName[ i ] );
+            RT_AppendMapNamePart(
+                mapname_lower, i, std::size( mapname_lower ), fileSystem.GetResourceFileName( wadnum ) );
+            if( i > 0 && i < std::size( mapname_lower ) - 1 )
+            {
+                mapname_lower[ i++ ] = '_';
+            }
         }
+
+        RT_AppendMapNamePart(
+            mapname_lower, i, std::size( mapname_lower ), primaryLevel->MapName.GetChars() );
+
+        if( i > 0 && i < std::size( mapname_lower ) - 1 )
+        {
+            mapname_lower[ i++ ] = '_';
+        }
+        RT_AppendMapMd5( mapname_lower, i, std::size( mapname_lower ), primaryLevel->md5 );
+
         mapname_lower[ std::min( i, std::size( mapname_lower ) - 1 ) ] = '\0';
 
         return mapname_lower;
@@ -360,6 +463,58 @@ const char* RT_GetMapName()
     }
 
     return nullptr;
+}
+
+static bool RT_TextureNameEquals( const char* lhs, const char* rhs )
+{
+    if( !lhs || !rhs )
+    {
+        return false;
+    }
+
+    for( ; *lhs && *rhs; lhs++, rhs++ )
+    {
+        const unsigned char a = static_cast< unsigned char >( *lhs );
+        const unsigned char b = static_cast< unsigned char >( *rhs );
+        if( std::toupper( a ) != std::toupper( b ) )
+        {
+            return false;
+        }
+    }
+
+    return *lhs == '\0' && *rhs == '\0';
+}
+
+static constexpr const char* RT_EXPLICIT_LAVA_FLAT_TEXTURES[] = {
+    "FLTLAVA1", "FLTLAVA2", "FLTLAVA3", "FLTLAVA4", "FLATHUH1",
+    "X_001",    "X_002",    "X_003",    "X_004",
+};
+
+static const char* RT_CanonicalExplicitLavaFlatTexture( const char* texname )
+{
+    for( const char* canonical : RT_EXPLICIT_LAVA_FLAT_TEXTURES )
+    {
+        if( RT_TextureNameEquals( texname, canonical ) )
+        {
+            return canonical;
+        }
+    }
+    return nullptr;
+}
+
+static bool RT_IsExplicitLavaFlatTexture( const char* texname )
+{
+    return RT_CanonicalExplicitLavaFlatTexture( texname ) != nullptr;
+}
+
+static bool RT_ShouldForceLavaFloorTexture( const char* texname )
+{
+    return RT_IsExplicitLavaFlatTexture( texname );
+}
+
+static bool RT_ShouldIgnoreExternalGeometry()
+{
+    return cvar::rt_static_ignore_polyobjects && primaryLevel && primaryLevel->Polyobjects.Size() > 0;
 }
 
 bool RT_ForceNoClassicMode()
@@ -923,6 +1078,14 @@ public:
 
         m_created = true;
         m_name    = MakeTextureName( src );
+        if( RT_IsExplicitLavaFlatTexture( m_name.c_str() ) )
+        {
+            m_classic_name = m_name;
+            for( char& ch : m_classic_name )
+            {
+                ch = static_cast< char >( std::tolower( static_cast< unsigned char >( ch ) ) );
+            }
+        }
 
         if( m_name.empty() || !src.GetTexture() )
         {
@@ -963,6 +1126,14 @@ public:
 
         RgResult r = rt.rgProvideOriginalTexture( &info );
         RG_CHECK( r );
+
+        if( !m_classic_name.empty() )
+        {
+            info.pTextureName = m_classic_name.c_str();
+
+            r = rt.rgProvideOriginalTexture( &info );
+            RG_CHECK( r );
+        }
     }
 
     ~RTHardwareTexture() override
@@ -979,13 +1150,23 @@ public:
         return m_created && !m_name.empty() ? m_name.c_str() : nullptr;
     }
 
+    auto GetRTClassicName() const -> const char*
+    {
+        return m_created && !m_classic_name.empty() ? m_classic_name.c_str() : nullptr;
+    }
+
 private:
     static auto MakeTextureName( FGameTexture& fgametex ) -> std::string
     {
         // highest priority: FGameTexture name
         if( !fgametex.GetName().IsEmpty() )
         {
-            return fgametex.GetName().GetChars();
+            const char* name = fgametex.GetName().GetChars();
+            if( const char* canonical = RT_CanonicalExplicitLavaFlatTexture( name ) )
+            {
+                return canonical;
+            }
+            return name;
         }
 
         // if no lump name, stringify the image ID;
@@ -1009,6 +1190,7 @@ private:
 private:
     bool        m_created{ false };
     std::string m_name{};
+    std::string m_classic_name{};
 };
 
 
@@ -1479,7 +1661,8 @@ private:
             return;
         }
 
-        const char* texname = nullptr;
+        const bool  fullClassicMode = !RT_ForceNoClassicMode() && float( cvar::rt_classic ) >= 0.999f;
+        const char* texname         = nullptr;
         if( mTextureEnabled && mMaterial.mMaterial )
         {
             if( FGameTexture* gametex = mMaterial.mMaterial->sourcetex )
@@ -1494,7 +1677,9 @@ private:
                                               mMaterial.mTranslation,
                                               mMaterial.mMaterial->GetScaleFlags(),
                                               mRenderStyle );
-                        texname = hwtex->GetRTName();
+                        texname = fullClassicMode && hwtex->GetRTClassicName()
+                                      ? hwtex->GetRTClassicName()
+                                      : hwtex->GetRTName();
                     }
                 }
             }
@@ -1550,6 +1735,9 @@ private:
         {
             transform = MakeTransform( rtstate.is< RtPrim::Sky >() );
         }
+
+        const bool forceLavaFloorTexture =
+            !fullClassicMode && RT_ShouldForceLavaFloorTexture( texname );
 
         auto ui = RgMeshPrimitiveSwapchainedEXT{
             .sType       = RG_STRUCTURE_TYPE_MESH_PRIMITIVE_SWAPCHAINED_EXT,
@@ -1611,7 +1799,7 @@ private:
             .localLightsIntensity = MapLightLevel( rtstate.m_lightlevel ),
         };
 
-        auto makePrimFlags = [ this, &verts ]( bool isUI ) -> RgMeshPrimitiveFlags {
+        auto makePrimFlags = [ this, &verts, forceLavaFloorTexture ]( bool isUI ) -> RgMeshPrimitiveFlags {
             if( isUI )
             {
                 return RG_MESH_PRIMITIVE_TRANSLUCENT;
@@ -1641,6 +1829,10 @@ private:
             {
                 return RG_MESH_PRIMITIVE_GLASS;
             }
+            if( forceLavaFloorTexture )
+            {
+                return RG_MESH_PRIMITIVE_WATER;
+            }
 
             RgMeshPrimitiveFlags add;
             switch( int( cvar::rt_wall_nomv ) )
@@ -1660,7 +1852,8 @@ private:
         // HACKHACK: replacements are ignored if a prim is rasterized, force alpha=1.0
         const bool forcealpha1 = ( mesh.flags & RG_MESH_FORCE_GLASS ) ||
                                  ( mesh.flags & RG_MESH_FORCE_MIRROR ) ||
-                                 ( mesh.flags & RG_MESH_FORCE_WATER );
+                                 ( mesh.flags & RG_MESH_FORCE_WATER ) ||
+                                 forceLavaFloorTexture;
 
         auto prim = RgMeshPrimitiveInfo{
             .sType = RG_STRUCTURE_TYPE_MESH_PRIMITIVE_INFO,
@@ -1679,9 +1872,12 @@ private:
             .color =
                 rtcolor_multiply( mStreamData.uObjectColor, mStreamData.uVertexColor, forcealpha1 ),
             .emissive =
-                ( mRenderStyle.BlendOp == STYLEOP_Add && mRenderStyle.DestAlpha == STYLEALPHA_One )
-                    ? cvar::rt_emis_additive_dflt
-                    : 0.f,
+                forceLavaFloorTexture
+                    ? 1.0f
+                    : ( ( mRenderStyle.BlendOp == STYLEOP_Add &&
+                          mRenderStyle.DestAlpha == STYLEALPHA_One )
+                            ? cvar::rt_emis_additive_dflt
+                            : 0.f ),
             .classicLight = lightlevel_to_classic( isUI, mLightParms[ 3 ] ),
         };
 
@@ -2014,6 +2210,189 @@ std::atomic< HWND > g_msgbox_parent{};
 
 
 
+std::string RT_InitErrorMessage(RgResult r, bool isdebug, const char* remixdll)
+{
+    auto msg = std::string{ "RgResult code: " };
+
+    switch( r )
+    {
+        case RG_RESULT_CANT_FIND_DYNAMIC_LIBRARY:
+            msg = remixdll  ? "Can't load Remix Renderer DLLs"
+                  : isdebug ? "Can't find RTGL library. Checked RTGL1_LIBRARY_PATH, build-rtgl-linux/libRTGL1.so, rt/bin/debug/libRTGL1.so, rt/bin/libRTGL1.so, and libRTGL1.so"
+                            : "Can't find RTGL library. Checked RTGL1_LIBRARY_PATH, build-rtgl-linux/libRTGL1.so, rt/bin/RTGL1.dll, rt/bin/libRTGL1.so, and libRTGL1.so";
+            break;
+        case RG_RESULT_CANT_FIND_ENTRY_FUNCTION_IN_DYNAMIC_LIBRARY:
+            msg =
+                remixdll  ? "Can't find rgCreateInstance function in Remix Renderer wrapper DLL"
+                : isdebug ? "Can't find rgCreateInstance function in RTGL debug library"
+                          : "Can't find rgCreateInstance function in RTGL library";
+            break;
+
+        // clang-format off
+        case RG_RESULT_NOT_INITIALIZED:                     msg += "RG_RESULT_NOT_INITIALIZED";                     break;
+        case RG_RESULT_ALREADY_INITIALIZED:                 msg += "RG_RESULT_ALREADY_INITIALIZED";                 break;
+        case RG_RESULT_GRAPHICS_API_ERROR:                  msg += "RG_RESULT_GRAPHICS_API_ERROR";                  break;
+        case RG_RESULT_INTERNAL_ERROR:                      msg += "RG_RESULT_INTERNAL_ERROR";                      break;
+        case RG_RESULT_CANT_FIND_SUPPORTED_PHYSICAL_DEVICE: msg += "RG_RESULT_CANT_FIND_SUPPORTED_PHYSICAL_DEVICE"; break;
+        case RG_RESULT_FRAME_WASNT_STARTED:                 msg += "RG_RESULT_FRAME_WASNT_STARTED";                 break;
+        case RG_RESULT_FRAME_WASNT_ENDED:                   msg += "RG_RESULT_FRAME_WASNT_ENDED";                   break;
+        case RG_RESULT_WRONG_FUNCTION_CALL:                 msg += "RG_RESULT_WRONG_FUNCTION_CALL";                 break;
+        case RG_RESULT_WRONG_FUNCTION_ARGUMENT:             msg += "RG_RESULT_WRONG_FUNCTION_ARGUMENT";             break;
+        case RG_RESULT_WRONG_STRUCTURE_TYPE:                msg += "RG_RESULT_WRONG_STRUCTURE_TYPE";                break;
+        case RG_RESULT_ERROR_CANT_FIND_HARDCODED_RESOURCES: msg += "RG_RESULT_ERROR_CANT_FIND_HARDCODED_RESOURCES"; break;
+        case RG_RESULT_ERROR_CANT_FIND_SHADER:              msg += "RG_RESULT_ERROR_CANT_FIND_SHADER";              break;
+        case RG_RESULT_ERROR_MEMORY_ALIGNMENT:              msg += "RG_RESULT_ERROR_MEMORY_ALIGNMENT";              break;
+        case RG_RESULT_ERROR_NO_VULKAN_EXTENSION:           msg += "RG_RESULT_ERROR_NO_VULKAN_EXTENSION";           break;
+            // clang-format on
+
+        default: msg += std::to_string( r ); break;
+    }
+
+    return msg;
+}
+
+void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, unsigned long xlibWindow)
+{
+    rt = RgInterface{};
+
+    auto info = RgInstanceCreateInfo
+    {
+        .sType = RG_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pNext = NULL,
+
+        .version = RG_RTGL_VERSION_API, .sizeOfRgInterface = sizeof( RgInterface ),
+
+        .pAppName = "GZDoom", .pAppGUID = "8cbd354f-38d3-4173-92b9-c16b5a210b37",
+
+        .pWin32SurfaceInfo = win32Info,
+        .pXlibSurfaceCreateInfo  = nullptr,
+
+        .pOverrideFolderPath = RT_ResolveRuntimePath(),
+
+        .pfnPrint = RT_Print, .pUserPrintData = nullptr,
+        .allowedMessages =
+            Args->CheckParm( "-rtdebug" )
+                ? RgMessageSeverityFlags{ RG_MESSAGE_SEVERITY_VERBOSE | RG_MESSAGE_SEVERITY_INFO |
+                                          RG_MESSAGE_SEVERITY_WARNING | RG_MESSAGE_SEVERITY_ERROR }
+                : RgMessageSeverityFlags{ 0 },
+
+        .primaryRaysMaxAlbedoLayers = 1, .indirectIlluminationMaxAlbedoLayers = 1,
+
+        .replacementsMaxVertexCount = 32 * 1024 * 1024, .dynamicMaxVertexCount = 2 * 1024 * 1024,
+
+        .rayCullBackFacingTriangles = 0,
+        .allowTexCoordLayer1 = false, .allowTexCoordLayer2 = false, .allowTexCoordLayer3 = false,
+
+        .lightmapTexCoordLayerIndex = 1,
+
+        .rasterizedMaxVertexCount = 1 << 20, .rasterizedMaxIndexCount = 1 << 21,
+        .rasterizedVertexColorGamma = true,
+
+        .rasterizedSkyCubemapSize = 256,
+
+        .textureSamplerForceMinificationFilterLinear = true,
+        .textureSamplerForceNormalMapFilterLinear    = true,
+
+        .pbrTextureSwizzling = RG_TEXTURE_SWIZZLING_NULL_ROUGHNESS_METALLIC,
+
+        .effectWipeIsUsed = true,
+
+        .worldUp = { 0, 0, 1 }, .worldForward = { 0, 1, 0 }, .worldScale = 1.0f,
+
+        .importedLightIntensityScaleDirectional = 1.0f / 50,
+        .importedLightIntensityScaleSphere      = 1.0f / 500,
+        .importedLightIntensityScaleSpot        = 1.0f / 500,
+    };
+
+#ifndef NDEBUG
+    constexpr bool isdebug = true;
+#else
+    constexpr bool isdebug = false;
+#endif
+
+    const char* remixdll = g_isremix ? "\\bin_remix\\RTGL1.dll" : nullptr;
+
+#ifdef _WIN32
+    RgResult r = rgLoadLibraryAndCreate( &info, isdebug, remixdll, &rt, nullptr );
+#else
+    if( g_isremix )
+    {
+        DPrintf(DMSG_WARNING, "RTX Remix wrapper is not available on Linux; using native RTGL.\n");
+        remixdll = nullptr;
+    }
+    RgResult r = RT_DlopenAndCreateXlib( &info, xlibDisplay, xlibWindow, isdebug, &rt );
+#endif
+    if( r != RG_RESULT_SUCCESS )
+    {
+        auto msg = RT_InitErrorMessage(r, isdebug, remixdll);
+
+#ifdef _WIN32
+        MessageBoxA(
+            nullptr, msg.c_str(), "Failed to initialize RT renderer", MB_ICONEXCLAMATION | MB_OK );
+#else
+        fprintf(stderr, "Failed to initialize RT renderer: %s\n", msg.c_str());
+        DPrintf(DMSG_ERROR, "Failed to initialize RT renderer: %s\n", msg.c_str());
+#endif
+        exit( -1 );
+    }
+
+    // on first start, try to set DLSS, if available
+    if( cvar::rt_firststart )
+    {
+        if( rt.rgUtilIsUpscaleTechniqueAvailable( RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS, //
+                                                  RG_FRAME_GENERATION_MODE_OFF,
+                                                  nullptr ) )
+        {
+            cvar::rt_upscale_dlss = 2;
+            cvar::rt_upscale_fsr2 = 0;
+            cvar::rt_remix_taa    = 0;
+            cvar::rt_ef_vintage   = 0;
+        }
+        else if( rt.rgUtilIsUpscaleTechniqueAvailable( RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR2, //
+                                                       RG_FRAME_GENERATION_MODE_OFF,
+                                                       nullptr ) )
+        {
+            cvar::rt_upscale_dlss = 0;
+            cvar::rt_upscale_fsr2 = 2;
+            cvar::rt_remix_taa    = 0;
+            cvar::rt_ef_vintage   = 0;
+        }
+        else
+        {
+            cvar::rt_upscale_dlss = 0;
+            cvar::rt_upscale_fsr2 = 0;
+            cvar::rt_remix_taa    = g_isremix ? 2 : 0;
+            cvar::rt_ef_vintage   = g_isremix ? 0 : RT_VINTAGE_480_DITHER;
+        }
+    }
+    else
+    {
+        if( g_isremix )
+        {
+            if( cvar::rt_upscale_dlss == 0 && //
+                cvar::rt_upscale_fsr2 > 0 &&  //
+                cvar::rt_remix_taa == 0 &&    //
+                cvar::rt_ef_vintage == 0 )
+            {
+                cvar::rt_remix_taa = cvar::rt_upscale_fsr2;
+            }
+            cvar::rt_upscale_fsr2 = 0;
+            cvar::rt_ef_vintage   = 0;
+        }
+        else
+        {
+            if( cvar::rt_upscale_dlss == 0 && //
+                cvar::rt_upscale_fsr2 == 0 &&  //
+                cvar::rt_remix_taa > 0 &&    //
+                cvar::rt_ef_vintage == 0 )
+            {
+                cvar::rt_upscale_fsr2 = cvar::rt_remix_taa;
+            }
+            cvar::rt_remix_taa = 0;
+        }
+    }
+}
+
+#ifdef _WIN32
 RG_D3D12CORE_HELPER( "rt/" )
 
 Win32RTVideo::Win32RTVideo()
@@ -2095,7 +2474,7 @@ Win32RTVideo::Win32RTVideo()
             msg += "\n\nDo you want to download the missing files?\n";
             msg += "\nYES - open renderer's Download page";
             msg += "\nNO  - proceed with a limited feature set";
-            
+
             int l = MessageBoxA( g_msgbox_parent.load(),
                                  msg.c_str(),
                                  "DLL check failure",
@@ -2109,176 +2488,11 @@ Win32RTVideo::Win32RTVideo()
         }
     }
 
-    rt = RgInterface{};
-
-#ifdef WIN32
     auto win32Info = RgWin32SurfaceCreateInfo{
         .hinstance = GetModuleHandle( NULL ),
         .hwnd      = mainwindow.GetHandle(),
     };
-#else
-    RgXlibSurfaceCreateInfo x11Info = { .dpy    = wmInfo.info.x11.display,
-                                        .window = wmInfo.info.x11.window };
-#endif
-
-    auto info = RgInstanceCreateInfo
-    {
-        .sType = RG_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pNext = NULL,
-
-        .version = RG_RTGL_VERSION_API, .sizeOfRgInterface = sizeof( RgInterface ),
-
-        .pAppName = "GZDoom", .pAppGUID = "8cbd354f-38d3-4173-92b9-c16b5a210b37",
-
-#if WIN32
-        .pWin32SurfaceInfo = &win32Info,
-#else
-        .pXlibSurfaceCreateInfo  = &x11Info,
-#endif
-
-        .pOverrideFolderPath = "rt/",
-
-        .pfnPrint = RT_Print, .pUserPrintData = nullptr,
-        .allowedMessages =
-            Args->CheckParm( "-rtdebug" )
-                ? RgMessageSeverityFlags{ RG_MESSAGE_SEVERITY_VERBOSE | RG_MESSAGE_SEVERITY_INFO |
-                                          RG_MESSAGE_SEVERITY_WARNING | RG_MESSAGE_SEVERITY_ERROR }
-                : RgMessageSeverityFlags{ 0 },
-
-        .primaryRaysMaxAlbedoLayers = 1, .indirectIlluminationMaxAlbedoLayers = 1,
-
-        .replacementsMaxVertexCount = 32 * 1024 * 1024, .dynamicMaxVertexCount = 2 * 1024 * 1024,
-
-        .rayCullBackFacingTriangles = 0,
-        .allowTexCoordLayer1 = false, .allowTexCoordLayer2 = false, .allowTexCoordLayer3 = false,
-
-        .lightmapTexCoordLayerIndex = 1,
-
-        .rasterizedMaxVertexCount = 1 << 20, .rasterizedMaxIndexCount = 1 << 21,
-        .rasterizedVertexColorGamma = true,
-
-        .rasterizedSkyCubemapSize = 256,
-
-        .textureSamplerForceMinificationFilterLinear = true,
-        .textureSamplerForceNormalMapFilterLinear    = true,
-
-        .pbrTextureSwizzling = RG_TEXTURE_SWIZZLING_NULL_ROUGHNESS_METALLIC,
-
-        .effectWipeIsUsed = true,
-
-        .worldUp = { 0, 0, 1 }, .worldForward = { 0, 1, 0 }, .worldScale = 1.0f,
-
-        .importedLightIntensityScaleDirectional = 1.0f / 50,
-        .importedLightIntensityScaleSphere      = 1.0f / 500,
-        .importedLightIntensityScaleSpot        = 1.0f / 500,
-    };
-
-#ifndef NDEBUG
-    constexpr bool isdebug = true;
-#else
-    constexpr bool isdebug = false;
-#endif
-
-    const char* remixdll = g_isremix ? "\\bin_remix\\RTGL1.dll" : nullptr;
-
-    RgResult r = rgLoadLibraryAndCreate( &info, isdebug, remixdll, &rt, nullptr );
-    if( r != RG_RESULT_SUCCESS )
-    {
-        auto msg = std::string{ "RgResult code: " };
-
-        switch( r )
-        {
-            case RG_RESULT_CANT_FIND_DYNAMIC_LIBRARY:
-                msg = remixdll  ? "Can't load Remix Renderer DLLs"
-                      : isdebug ? "Can't find \'rt/bin/debug/RTGL1.dll\' file"
-                                : "Can't find \'rt/bin/RTGL1.dll\' file";
-                break;
-            case RG_RESULT_CANT_FIND_ENTRY_FUNCTION_IN_DYNAMIC_LIBRARY:
-                msg =
-                    remixdll  ? "Can't find rgCreateInstance function in Remix Renderer wrapper DLL"
-                    : isdebug ? "Can't find rgCreateInstance function in \'rt/bin/debug/RTGL1.dll\'"
-                              : "Can't find rgCreateInstance function in \'rt/bin/RTGL1.dll\'";
-                break;
-
-            // clang-format off
-            case RG_RESULT_NOT_INITIALIZED:                     msg += "RG_RESULT_NOT_INITIALIZED";                     break;
-            case RG_RESULT_ALREADY_INITIALIZED:                 msg += "RG_RESULT_ALREADY_INITIALIZED";                 break;
-            case RG_RESULT_GRAPHICS_API_ERROR:                  msg += "RG_RESULT_GRAPHICS_API_ERROR";                  break;
-            case RG_RESULT_INTERNAL_ERROR:                      msg += "RG_RESULT_INTERNAL_ERROR";                      break;
-            case RG_RESULT_CANT_FIND_SUPPORTED_PHYSICAL_DEVICE: msg += "RG_RESULT_CANT_FIND_SUPPORTED_PHYSICAL_DEVICE"; break;
-            case RG_RESULT_FRAME_WASNT_STARTED:                 msg += "RG_RESULT_FRAME_WASNT_STARTED";                 break;
-            case RG_RESULT_FRAME_WASNT_ENDED:                   msg += "RG_RESULT_FRAME_WASNT_ENDED";                   break;
-            case RG_RESULT_WRONG_FUNCTION_CALL:                 msg += "RG_RESULT_WRONG_FUNCTION_CALL";                 break;
-            case RG_RESULT_WRONG_FUNCTION_ARGUMENT:             msg += "RG_RESULT_WRONG_FUNCTION_ARGUMENT";             break;
-            case RG_RESULT_WRONG_STRUCTURE_TYPE:                msg += "RG_RESULT_WRONG_STRUCTURE_TYPE";                break;
-            case RG_RESULT_ERROR_CANT_FIND_HARDCODED_RESOURCES: msg += "RG_RESULT_ERROR_CANT_FIND_HARDCODED_RESOURCES"; break;
-            case RG_RESULT_ERROR_CANT_FIND_SHADER:              msg += "RG_RESULT_ERROR_CANT_FIND_SHADER";              break;
-            case RG_RESULT_ERROR_MEMORY_ALIGNMENT:              msg += "RG_RESULT_ERROR_MEMORY_ALIGNMENT";              break;
-            case RG_RESULT_ERROR_NO_VULKAN_EXTENSION:           msg += "RG_RESULT_ERROR_NO_VULKAN_EXTENSION";           break;
-                // clang-format on
-
-            default: msg += std::to_string( r ); break;
-        }
-
-        MessageBoxA(
-            nullptr, msg.c_str(), "Failed to initialize RT renderer", MB_ICONEXCLAMATION | MB_OK );
-        exit( -1 );
-    }
-
-    // on first start, try to set DLSS, if available
-    if( cvar::rt_firststart )
-    {
-        if( rt.rgUtilIsUpscaleTechniqueAvailable( RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS, //
-                                                  RG_FRAME_GENERATION_MODE_OFF,
-                                                  nullptr ) )
-        {
-            cvar::rt_upscale_dlss = 2;
-            cvar::rt_upscale_fsr2 = 0;
-            cvar::rt_remix_taa    = 0;
-            cvar::rt_ef_vintage   = 0;
-        }
-        else if( rt.rgUtilIsUpscaleTechniqueAvailable( RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR2, //
-                                                       RG_FRAME_GENERATION_MODE_OFF,
-                                                       nullptr ) )
-        {
-            cvar::rt_upscale_dlss = 0;
-            cvar::rt_upscale_fsr2 = 2;
-            cvar::rt_remix_taa    = 0;
-            cvar::rt_ef_vintage   = 0;
-        }
-        else
-        {
-            cvar::rt_upscale_dlss = 0;
-            cvar::rt_upscale_fsr2 = 0;
-            cvar::rt_remix_taa    = g_isremix ? 2 : 0;
-            cvar::rt_ef_vintage   = g_isremix ? 0 : RT_VINTAGE_480_DITHER;
-        }
-    }
-    else
-    {
-        if( g_isremix )
-        {
-            if( cvar::rt_upscale_dlss == 0 && //
-                cvar::rt_upscale_fsr2 > 0 &&  //
-                cvar::rt_remix_taa == 0 &&    //
-                cvar::rt_ef_vintage == 0 )
-            {
-                cvar::rt_remix_taa = cvar::rt_upscale_fsr2;
-            }
-            cvar::rt_upscale_fsr2 = 0;
-            cvar::rt_ef_vintage   = 0;
-        }
-        else
-        {
-            if( cvar::rt_upscale_dlss == 0 && //
-                cvar::rt_upscale_fsr2 == 0 &&  //
-                cvar::rt_remix_taa > 0 &&    //
-                cvar::rt_ef_vintage == 0 )
-            {
-                cvar::rt_upscale_fsr2 = cvar::rt_remix_taa;
-            }
-            cvar::rt_remix_taa = 0;
-        }
-    }
+    RT_InitInstance(&win32Info, nullptr, 0);
 }
 
 DFrameBuffer* Win32RTVideo::CreateFrameBuffer()
@@ -2303,6 +2517,33 @@ void Win32RTVideo::Shutdown()
 
     rt = {};
 }
+#else
+void RT_InitXlibSurface(void* display, unsigned long window)
+{
+    RT_InitInstance(nullptr, display, window);
+}
+
+DFrameBuffer* RT_CreateFrameBuffer(void* hMonitor, bool fullscreen)
+{
+    return new RTFrameBuffer{ hMonitor, fullscreen };
+}
+
+void RT_Shutdown()
+{
+    if( rt.rgDestroyInstance )
+    {
+        RgResult r = rt.rgDestroyInstance();
+        if( r != RG_RESULT_SUCCESS )
+        {
+            DPrintf(DMSG_ERROR, "rgDestroyInstance failed: %s\n", RT_InitErrorMessage(r, false, nullptr).c_str());
+        }
+    }
+
+    rt = {};
+
+    RT_UnloadLibrary();
+}
+#endif
 
 void RT_ShowWarningMessageBox( const char* msg )
 {
@@ -2315,12 +2556,17 @@ void RT_ShowWarningMessageBox( const char* msg )
 
 bool RT_AskToOpenUrl( const char* heading, const char* msg, const wchar_t* url )
 {
+#ifdef _WIN32
     int l = MessageBoxA( g_msgbox_parent.load(), msg, heading, MB_ICONEXCLAMATION | MB_YESNO );
     if( l == IDYES )
     {
         ShellExecute( nullptr, 0, url, 0, 0, SW_SHOW );
         return true;
     }
+#else
+    DPrintf( DMSG_WARNING, "%s\n%s\n", heading, msg );
+    ( void )url;
+#endif
     return false;
 }
 
@@ -3031,7 +3277,9 @@ void RTFrameBuffer::RT_BeginFrame()
         if( g_rt_skipinitframes == 0 )
         {
             RT_CloseLauncherWindow(); // renderer is ready, close launcher window
+#ifdef _WIN32
             PositionWindow( IsFullscreen() );
+#endif
             g_rt_forcenofocuschange = false;
         }
         --g_rt_skipinitframes;
@@ -3099,15 +3347,16 @@ void RTFrameBuffer::RT_BeginFrame()
     };
 
     RgStaticSceneStatusFlags staticscene_status = 0;
+    const bool ignore_external_geometry = RT_ShouldIgnoreExternalGeometry();
 
     auto info = RgStartFrameInfo{
         .sType                  = RG_STRUCTURE_TYPE_START_FRAME_INFO,
         .pNext                  = &fluid_params,
         .pMapName               = RT_GetMapName(),
-        .ignoreExternalGeometry = false,
+        .ignoreExternalGeometry = ignore_external_geometry,
         .vsync                  = cvar::rt_vsync,
         .hdr                    = cvar::rt_hdr_available ? cvar::rt_hdr : false,
-        .allowMapAutoExport     = cvar::rt_autoexport,
+        .allowMapAutoExport     = cvar::rt_autoexport && !ignore_external_geometry,
         .lightmapScreenCoverage = RT_ForceNoClassicMode() ? 0.0f : cvar::rt_classic,
         .lightstyleValuesCount  = uint32_t( g_sectorlightlevels.size() ),
         .pLightstyleValues8     = g_sectorlightlevels.data(),
@@ -4040,6 +4289,11 @@ bool RT_IsWallExportable( const seg_t* seg, const std::vector< bool >& animatedT
     if( !seg )
     {
         assert( 0 );
+        return false;
+    }
+
+    if( seg->sidedef && ( seg->sidedef->Flags & WALLF_POLYOBJ ) )
+    {
         return false;
     }
 

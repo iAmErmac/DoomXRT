@@ -32,8 +32,10 @@ class GoldWand : HereticWeapon
 		Loop;
 	Fire:
 		GWND B 3;
+		GWND C 0 A_Light1;
 		GWND C 5 A_FireGoldWandPL1;
 		GWND D 3;
+		GWND D 0 A_Light0;
 		GWND D 0 A_ReFire;
 		Goto Ready;
 	}
@@ -91,8 +93,10 @@ class GoldWandPowered : GoldWand
 	{
 	Fire:
 		GWND B 3;
+		GWND C 0 A_Light2;
 		GWND C 4 A_FireGoldWandPL2;
 		GWND D 3;
+		GWND D 0 A_Light0;
 		GWND D 0 A_ReFire;
 		Goto Ready;
 	}

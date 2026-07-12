@@ -43,7 +43,6 @@ if (NOT VCPKG_TOOLCHAIN)
 	set(VCPKG_MANIFEST_FEATURES)
 endif()
 
-
 if( WIN32 )
 	set( HAVE_RT_DEFAULT ON )
 else()

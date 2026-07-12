@@ -1,0 +1,88 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "GZDoom",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${command:cmake.buildDirectory}/non-rt/gzdoom",
+            "args": [
+                "-config",
+                "${workspaceFolder}/gzdoom-linux.ini",
+                "+r_drawvoxels",
+                "1"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${command:cmake.buildDirectory}/zmusic/source"
+                },
+                {
+                    "name": "DOOMWADDIR",
+                    "value": "${env:HOME}/Games/gzdoom-rt/wad"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build linux non-rt",
+            "osx": {
+                "program": "${command:cmake.buildDirectory}/non-rt/gzdoom.app/Contents/MacOS/gzdoom",
+                "environment": [
+                    {
+                        "name": "DYLD_LIBRARY_PATH",
+                        "value": "${command:cmake.buildDirectory}/zmusic/source"
+                    },
+                    {
+                        "name": "DOOMWADDIR",
+                        "value": "${env:HOME}/Games/gzdoom-rt/wad"
+                    }
+                ],
+                "MIMode": "lldb",
+                "preLaunchTask": "build macos non-rt"
+            }
+        },
+        {
+            "name": "GZDoom Ray Tracing",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${command:cmake.buildDirectory}/rt/gzdoom",
+            "args": [
+                "-config",
+                "${workspaceFolder}/gzdoom-rt-linux.ini"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${command:cmake.buildDirectory}/zmusic/source:${command:cmake.buildDirectory}/rtgl"
+                },
+                {
+                    "name": "DOOMWADDIR",
+                    "value": "${env:HOME}/Games/gzdoom-rt/wad"
+                },
+                {
+                    "name": "GZDOOM_RT_ASSET_DIR",
+                    "value": "${env:HOME}/Games/gzdoom-rt/assets/gzdoom-rt-runtime/1.0.2/rt"
+                },
+                {
+                    "name": "GZDOOM_RT_RUNTIME_DIR",
+                    "value": "${env:HOME}/.cache/gzdoom-rt/runtime/current"
+                },
+                {
+                    "name": "RTGL1_SDK_PATH",
+                    "value": "${workspaceFolder}/libraries/RTGL"
+                },
+                {
+                    "name": "RTGL1_LIBRARY_PATH",
+                    "value": "${command:cmake.buildDirectory}/rtgl/libRTGL1.so"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build linux rt probe"
+        }
+    ]
+}

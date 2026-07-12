@@ -1316,7 +1316,13 @@ FileReader FileSystem::OpenFileReader(int lump, int readertype, int readerflags)
 	}
 
 	auto file = FileInfo[lump].resfile;
-	return file->GetEntryReader(FileInfo[lump].resindex, readertype, readerflags);
+	auto reader = file->GetEntryReader(FileInfo[lump].resindex, readertype, readerflags);
+	if (!reader.isOpen())
+	{
+		throw FileSystemException("OpenFileReader: could not open lump '%s' from '%s'",
+			GetFileFullName(lump), GetResourceFileName(FileInfo[lump].rfnum));
+	}
+	return reader;
 }
 
 FileReader FileSystem::OpenFileReader(const char* name)

@@ -391,6 +391,9 @@ public:
 	particle_t * particle;
 	TArray<lightlist_t> *lightlist;
 	DRotator Angles;
+#if HAVE_RT
+	bool rt_isspriteshadow;
+#endif
 
 
 	void SplitSprite(HWDrawInfo *di, sector_t * frontsector, bool translucent);

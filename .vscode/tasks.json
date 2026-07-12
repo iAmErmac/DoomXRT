@@ -1,0 +1,164 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "configure zmusic linux",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "build_type=\"$1\"; workspace=\"$2\"; case \"$build_type\" in Debug|Release|RelWithDebInfo) ;; *) echo \"Unsupported CMake build type: $build_type. Select Debug or Release in the VS Code bottom bar.\"; exit 2;; esac; cmake -S \"$workspace/libraries/ZMusic\" -B \"$workspace/build/$build_type/zmusic\" -G Ninja -DCMAKE_BUILD_TYPE=\"$build_type\" -DZMUSIC_INSTALL=OFF",
+                "--",
+                "${command:cmake.buildType}",
+                "${workspaceFolder}"
+            ],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "build zmusic linux",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "build_type=\"$1\"; workspace=\"$2\"; case \"$build_type\" in Debug|Release|RelWithDebInfo) ;; *) echo \"Unsupported CMake build type: $build_type. Select Debug or Release in the VS Code bottom bar.\"; exit 2;; esac; cmake --build \"$workspace/build/$build_type/zmusic\" --parallel",
+                "--",
+                "${command:cmake.buildType}",
+                "${workspaceFolder}"
+            ],
+            "group": "build",
+            "dependsOn": "configure zmusic linux",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "configure rtgl linux",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "build_type=\"$1\"; workspace=\"$2\"; case \"$build_type\" in Debug|Release|RelWithDebInfo) ;; *) echo \"Unsupported CMake build type: $build_type. Select Debug or Release in the VS Code bottom bar.\"; exit 2;; esac; cmake -S \"$workspace/libraries/RTGL\" -B \"$workspace/build/$build_type/rtgl\" -G Ninja -DCMAKE_BUILD_TYPE=\"$build_type\" -DRG_WITH_SURFACE_XLIB=ON -DRG_WITH_SURFACE_WAYLAND=OFF -DRG_WITH_DX12=OFF -DRG_WITH_NATIVE_DLSS=OFF -DRG_WITH_IMGUI=OFF -DRG_WITH_EXAMPLES=OFF",
+                "--",
+                "${command:cmake.buildType}",
+                "${workspaceFolder}"
+            ],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "build rtgl linux",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "build_type=\"$1\"; workspace=\"$2\"; case \"$build_type\" in Debug|Release|RelWithDebInfo) ;; *) echo \"Unsupported CMake build type: $build_type. Select Debug or Release in the VS Code bottom bar.\"; exit 2;; esac; cmake --build \"$workspace/build/$build_type/rtgl\" --parallel",
+                "--",
+                "${command:cmake.buildType}",
+                "${workspaceFolder}"
+            ],
+            "group": "build",
+            "dependsOn": "configure rtgl linux",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "configure linux non-rt",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--preset",
+                "linux-non-rt-${command:cmake.buildType}"
+            ],
+            "group": "build",
+            "dependsOn": "build zmusic linux",
+            "problemMatcher": []
+        },
+        {
+            "label": "build linux non-rt",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "--preset",
+                "linux-non-rt-${command:cmake.buildType}",
+                "--parallel"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "dependsOn": "configure linux non-rt",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "configure macos non-rt",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "build_type=\"$1\"; workspace=\"$2\"; case \"$build_type\" in Debug|Release|RelWithDebInfo) ;; *) echo \"Unsupported CMake build type: $build_type. Select Debug or Release in the VS Code bottom bar.\"; exit 2;; esac; cmake -S \"$workspace\" -B \"$workspace/build/$build_type/non-rt\" -G Ninja -DCMAKE_BUILD_TYPE=\"$build_type\" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DZDOOM_EXE_NAME:STRING=gzdoom -DZDOOM_OUTPUT_DIR=\"$workspace/build/$build_type/non-rt\" -DPK3_QUIET_ZIPDIR=ON -DZMUSIC_INCLUDE_DIR=\"$workspace/libraries/ZMusic/include\" -DZMUSIC_LIBRARIES=\"$workspace/build/$build_type/zmusic/source/libzmusic.dylib\" -DCMAKE_BUILD_RPATH=\"$workspace/build/$build_type/zmusic/source\" -DHAVE_RT=OFF",
+                "--",
+                "${command:cmake.buildType}",
+                "${workspaceFolder}"
+            ],
+            "group": "build",
+            "dependsOn": "build zmusic linux",
+            "problemMatcher": []
+        },
+        {
+            "label": "build macos non-rt",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "build_type=\"$1\"; workspace=\"$2\"; case \"$build_type\" in Debug|Release|RelWithDebInfo) ;; *) echo \"Unsupported CMake build type: $build_type. Select Debug or Release in the VS Code bottom bar.\"; exit 2;; esac; cmake --build \"$workspace/build/$build_type/non-rt\" --parallel",
+                "--",
+                "${command:cmake.buildType}",
+                "${workspaceFolder}"
+            ],
+            "group": "build",
+            "dependsOn": "configure macos non-rt",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "configure linux rt probe",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--preset",
+                "linux-rt-${command:cmake.buildType}"
+            ],
+            "options": {
+                "env": {
+                    "RTGL1_SDK_PATH": "${workspaceFolder}/libraries/RTGL",
+                    "RTGL1_LIBRARY_PATH": "${workspaceFolder}/build/${command:cmake.buildType}/rtgl/libRTGL1.so"
+                }
+            },
+            "group": "build",
+            "dependsOn": [
+                "build zmusic linux",
+                "build rtgl linux"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "build linux rt probe",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "--preset",
+                "linux-rt-${command:cmake.buildType}",
+                "--parallel"
+            ],
+            "options": {
+                "env": {
+                    "RTGL1_SDK_PATH": "${workspaceFolder}/libraries/RTGL",
+                    "RTGL1_LIBRARY_PATH": "${workspaceFolder}/build/${command:cmake.buildType}/rtgl/libRTGL1.so"
+                }
+            },
+            "group": "build",
+            "dependsOn": "configure linux rt probe",
+            "problemMatcher": "$gcc"
+        }
+    ]
+}

@@ -1,0 +1,38 @@
+id = "doom-voxels"
+title = "Voxel Doom II"
+recipe = "../recipes/doom_voxels.py"
+default_version = "2.4"
+game_autoload = "doom"
+asset_policy = "external"
+
+[source]
+default_library = "~/Games/gzdoom-rt/mods"
+env = "RT_MODS_DIR"
+download_page = "https://www.moddb.com/mods/voxel-doom-ii/addons/voxel-doom-ii-with-parallax-textures"
+download_filename = "VoxelDoom_v2.4.pk3.zip"
+pk3_filename = "VoxelDoom_v2.4.pk3"
+version_key = "2.4-f16e1577"
+path = "doom-voxels/2.4-f16e1577"
+zip_md5 = "f16e15778600e95c99399d58f4eeb1ed"
+
+[runtime]
+rt_env = "RT_DATA_DIR"
+generated_pk3_dir = "rt/autoload/doom"
+generated_filename = "voxel-doom-ii-2.4-rt.pk3"
+install_manifest = "rt/autoload/.rt-mods/doom-voxels.json"
+default_install = false
+
+[recipe_steps]
+requires_downloaded_zip_in_library = true
+requires_extracted_pk3_in_library = true
+validate_voxels_and_voxeldef = true
+validate_source_only_by_default = true
+auto_strip_duplicate_cheello_scripts = true
+force_install_option = "--install-kvx"
+write_install_manifest = true
+uninstall_command = "tools/rt-mods/install-mod.sh doom-voxels --uninstall"
+
+[notes]
+license = "Voxel Doom II v2.4 is GPL v3.0 according to the ModDB addon description. Keep downloaded assets outside this repository."
+source = "Keep the fresh upstream Voxel Doom II v2.4 download in the external library for reference/upgrades."
+mode = "Doom RT already ships converted older Doom voxel replacements in rt/replace plus matching Cheello scripts. The recipe validates v2.4 by default and only installs KVX assets with --install-kvx, because v2.4 actor/corpse orientation can mismatch the older RT integration."

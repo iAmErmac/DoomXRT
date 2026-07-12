@@ -1381,7 +1381,7 @@ void D_PageDrawer (void)
 	if (Page.Exists())
 	{
 #if !HAVE_RT
-		DrawTexture(twod, Page, true, 0, y,
+		DrawTexture(twod, Page, true, 0, 0,
 			DTA_Fullscreen, true,
 			DTA_Masked, false,
 			DTA_BilinearFilter, true,
@@ -1953,11 +1953,12 @@ static void GetCmdLineFiles(std::vector<std::string>& wadfiles)
 	}
 
 #if HAVE_RT
-	if (!DirEntryExists("rt/wad"))
+	const char* rtWad = RT_ResolveRuntimeSubpath("wad");
+	if (!DirEntryExists(rtWad))
 	{
-		I_FatalError("Can't find rt/wad directory");
+		I_FatalError("Can't find RT runtime wad directory: %s", rtWad);
 	}
-	D_AddWildFile(wadfiles, "rt/wad", nullptr /* ignored */, GameConfig);
+	D_AddWildFile(wadfiles, rtWad, nullptr /* ignored */, GameConfig);
 #endif
 }
 
@@ -2167,6 +2168,22 @@ static void AddAutoloadFiles(const char *autoname, std::vector<std::string>& all
 {
 	LumpFilterIWAD.Format("%s.", autoname);	// The '.' is appened to simplify parsing the string 
 
+#if HAVE_RT
+	auto addRTAutoloadPackages = [&allwads](const char *dir)
+	{
+		FString pattern;
+
+		pattern.Format("%s/*.wad", dir);
+		D_AddWildFile(allwads, pattern.GetChars(), nullptr, GameConfig);
+
+		pattern.Format("%s/*.pk3", dir);
+		D_AddWildFile(allwads, pattern.GetChars(), nullptr, GameConfig);
+
+		pattern.Format("%s/*.pk7", dir);
+		D_AddWildFile(allwads, pattern.GetChars(), nullptr, GameConfig);
+	};
+#endif
+
 	// [SP] Dialog reaction - load lights.pk3 and brightmaps.pk3 based on user choices
 	if (!(gameinfo.flags & GI_SHAREWARE) && !(Args->CheckParm("-noextras")))
 	{
@@ -2229,6 +2246,18 @@ static void AddAutoloadFiles(const char *autoname, std::vector<std::string>& all
 			D_AddConfigFiles(allwads, file.GetChars(), "*.wad", GameConfig);
 			lastpos = len;
 		}
+
+#if HAVE_RT
+		addRTAutoloadPackages(RT_ResolveRuntimeSubpath("autoload/global"));
+
+		lastpos = -1;
+		while ((len = LumpFilterIWAD.IndexOf('.', lastpos+1)) > 0)
+		{
+			file.Format("%s/autoload/%s", RT_ResolveRuntimePath(), LumpFilterIWAD.Left(len).GetChars());
+			addRTAutoloadPackages(file.GetChars());
+			lastpos = len;
+		}
+#endif
 	}
 }
 
@@ -3809,12 +3838,7 @@ static int D_InitGame(const FIWADInfo* iwad_info, std::vector<std::string>& allw
 	staticEventManager.OnEngineInitialize();
 	return 0;
 }
-//==========================================================================
-//
-// D_DoomMain
-//
-//==========================================================================
-
+#if HAVE_RT
 static FString RT_GetFirstStartMarker()
 {
 	return M_GetConfigPath( false ) + ".firststart";
@@ -3839,6 +3863,13 @@ void RT_FirstStartDone()
 	file->Printf( "this file exists as a marker of the first start" );
 	delete file;
 }
+#endif
+
+//==========================================================================
+//
+// D_DoomMain
+//
+//==========================================================================
 
 static int D_DoomMain_Internal (void)
 {

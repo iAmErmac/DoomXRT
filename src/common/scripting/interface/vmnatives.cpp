@@ -1986,17 +1986,37 @@ DEFINE_ACTION_FUNCTION( DBlockingDescription_RT, RT_DrawDescriptions )
     return 0;
 }
 
-#define NOMINMAX
+#ifdef _WIN32
+    #define NOMINMAX
     #include "windows.h"
+#else
+    #include <SDL.h>
+#endif
 
 static std::pair< int, int > GetFullscreen()
 {
+#ifdef _WIN32
     // TODO: make a call to Screen
     // should be a monitor resolution
     return {
         GetSystemMetrics( SM_CXSCREEN ),
         GetSystemMetrics( SM_CYSCREEN ),
     };
+#else
+    SDL_DisplayMode mode = {};
+    if( SDL_WasInit( SDL_INIT_VIDEO ) && SDL_GetCurrentDisplayMode( 0, &mode ) == 0 )
+    {
+        return { mode.w, mode.h };
+    }
+    return { 1920, 1080 };
+#endif
+}
+
+#else
+
+DEFINE_ACTION_FUNCTION(DListMenuItemSelectable, IsRtxRemix2)
+{
+	ACTION_RETURN_BOOL(false);
 }
 
 #endif // HAVE_RT

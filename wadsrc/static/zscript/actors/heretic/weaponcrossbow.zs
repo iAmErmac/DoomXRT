@@ -29,9 +29,11 @@ class Crossbow : HereticWeapon
 		CRBW A 1 A_Raise;
 		Loop;
 	Fire:
+		CRBW D 0 A_Light2;
 		CRBW D 6 A_FireCrossbowPL1;
 		CRBW EFGH 3;
 		CRBW AB 4;
+		CRBW C 0 A_Light0;
 		CRBW C 5 A_ReFire;
 		Goto Ready;
 	}
@@ -62,6 +64,7 @@ class Crossbow : HereticWeapon
 }
 
 
+
 class CrossbowPowered : Crossbow
 {
 	Default
@@ -75,6 +78,7 @@ class CrossbowPowered : Crossbow
 	States
 	{
 	Fire:
+		CRBW D 0 A_Light2;
 		CRBW D 5 A_FireCrossbowPL2;
 		CRBW E 3;
 		CRBW F 2;
@@ -82,6 +86,7 @@ class CrossbowPowered : Crossbow
 		CRBW H 2;
 		CRBW A 3;
 		CRBW B 3;
+		CRBW C 0 A_Light0;
 		CRBW C 4 A_ReFire;
 		Goto Ready;
 	}

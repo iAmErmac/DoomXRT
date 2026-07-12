@@ -69,6 +69,7 @@ enum class RtManyPrimsPerId : uint32_t
     No,
     Set0,
     Set1,
+    Set2,
 };
 
 struct FRtState
@@ -84,6 +85,7 @@ struct FRtState
     {
         m_uniqueIdToLastPrimIndex_0.clear();
         m_uniqueIdToLastPrimIndex_1.clear();
+        m_uniqueIdToLastPrimIndex_2.clear();
     #if RT_DEBUG_UNIQUEID
         m_seenUniqueIds.clear();
     #endif
@@ -136,6 +138,8 @@ struct FRtState
         m_curPrimitiveIndex = ( Seq == RtManyPrimsPerId::Set0 ) ? m_uniqueIdToLastPrimIndex_0[ id ]
                               : ( Seq == RtManyPrimsPerId::Set1 )
                                   ? m_uniqueIdToLastPrimIndex_1[ id ]
+                              : ( Seq == RtManyPrimsPerId::Set2 )
+                                  ? m_uniqueIdToLastPrimIndex_2[ id ]
                                   : 0;
 
         return detail::AutoPop{
@@ -151,6 +155,11 @@ struct FRtState
                 else if( Seq == RtManyPrimsPerId::Set1 )
                 {
                     fthis.m_uniqueIdToLastPrimIndex_1[ fthis.m_curUniqueID ] =
+                        fthis.m_curPrimitiveIndex;
+                }
+                else if( Seq == RtManyPrimsPerId::Set2 )
+                {
+                    fthis.m_uniqueIdToLastPrimIndex_2[ fthis.m_curUniqueID ] =
                         fthis.m_curPrimitiveIndex;
                 }
                 fthis.m_curUniqueID       = 0;
@@ -254,6 +263,7 @@ private:
 
     ankerl::unordered_dense::map< uint64_t, uint32_t > m_uniqueIdToLastPrimIndex_0{};
     ankerl::unordered_dense::map< uint64_t, uint32_t > m_uniqueIdToLastPrimIndex_1{};
+    ankerl::unordered_dense::map< uint64_t, uint32_t > m_uniqueIdToLastPrimIndex_2{};
 
     #if RT_DEBUG_UNIQUEID
     ankerl::unordered_dense::set< uint64_t > m_seenUniqueIds{};

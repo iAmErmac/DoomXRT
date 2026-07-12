@@ -2,6 +2,8 @@
 
 #if HAVE_RT
 
+#include <vector>
+
 struct sector_t;
 struct seg_t;
 
@@ -16,5 +18,8 @@ bool RT_IgnoreUserInput();
 
 auto RT_GetCurrentTime() -> double;
 auto RT_GetVramUsage( bool* ok = nullptr ) -> const char*;
+
+auto RT_ResolveRuntimePath() -> const char*;
+auto RT_ResolveRuntimeSubpath( const char* subpath ) -> const char*;
 
 #endif

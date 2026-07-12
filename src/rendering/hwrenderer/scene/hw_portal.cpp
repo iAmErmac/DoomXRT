@@ -245,8 +245,10 @@ void HWPortal::DrawPortalStencil(FRenderState &state, int pass)
 	
 	for (unsigned int i = 0; i < mPrimIndices.Size(); i += 2)
 	{
+#if HAVE_RT
 		auto rtexp = rtstate.push_type(
 		    RT_IsWallExportable( lines[ i / 2 ].seg ) ? RtPrim::ExportMap : RtPrim::Identity );
+#endif
 
 		state.Draw(DT_TriangleFan, mPrimIndices[i], mPrimIndices[i + 1], i == 0);
 	}

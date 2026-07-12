@@ -131,7 +131,8 @@ int FDirectory::AddDirectory(const char *dirpath, LumpFilterInfo* filter, FileSy
 					}
 					// for internal access we use the normalized form of the relative path.
 					Entries[count].FileName = NormalizeFileName(entry.FilePathRel.c_str());
-					Entries[count].SystemFilePath = stringpool->Strdup(Entries[count].FileName);
+					// Keep the real filesystem path case for case-sensitive platforms.
+					Entries[count].SystemFilePath = stringpool->Strdup(entry.FilePathRel.c_str());
 					Entries[count].CompressedSize = Entries[count].Length = entry.Length;
 					Entries[count].Flags = RESFF_FULLPATH;
 					Entries[count].ResourceID = -1;

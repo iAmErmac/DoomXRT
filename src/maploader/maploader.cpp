@@ -1673,6 +1673,137 @@ void MapLoader::FinishLoadingLineDefs ()
 
 #if HAVE_RT
 std::vector< std::pair< int, int > > rt_linesToSpecialAndTag{};
+
+static int RT_GetSectorTagArgForExportability(const line_t *ld)
+{
+	if (ld == nullptr)
+	{
+		return -1;
+	}
+
+	switch (ld->special)
+	{
+	case Ceiling_CrushAndRaise:
+	case Ceiling_CrushAndRaiseA:
+	case Ceiling_CrushAndRaiseDist:
+	case Ceiling_CrushAndRaiseSilentA:
+	case Ceiling_CrushAndRaiseSilentDist:
+	case Ceiling_CrushRaiseAndStay:
+	case Ceiling_CrushRaiseAndStayA:
+	case Ceiling_CrushRaiseAndStaySilA:
+	case Ceiling_CrushStop:
+	case Ceiling_LowerAndCrush:
+	case Ceiling_LowerAndCrushDist:
+	case Ceiling_LowerByTexture:
+	case Ceiling_LowerByValue:
+	case Ceiling_LowerByValueTimes8:
+	case Ceiling_LowerInstant:
+	case Ceiling_LowerToFloor:
+	case Ceiling_LowerToHighestFloor:
+	case Ceiling_LowerToLowest:
+	case Ceiling_LowerToNearest:
+	case Ceiling_MoveToValue:
+	case Ceiling_MoveToValueAndCrush:
+	case Ceiling_MoveToValueTimes8:
+	case Ceiling_RaiseByTexture:
+	case Ceiling_RaiseByValue:
+	case Ceiling_RaiseByValueTimes8:
+	case Ceiling_RaiseInstant:
+	case Ceiling_RaiseToHighest:
+	case Ceiling_RaiseToHighestFloor:
+	case Ceiling_RaiseToLowest:
+	case Ceiling_RaiseToNearest:
+	case Ceiling_Stop:
+	case Ceiling_ToFloorInstant:
+	case Ceiling_ToHighestInstant:
+	case Ceiling_Waggle:
+	case Door_Animated:
+	case Door_AnimatedClose:
+	case Door_Close:
+	case Door_CloseWaitOpen:
+	case Door_LockedRaise:
+	case Door_Open:
+	case Door_Raise:
+	case Door_WaitClose:
+	case Door_WaitRaise:
+	case Elevator_LowerToNearest:
+	case Elevator_MoveToFloor:
+	case Elevator_RaiseToNearest:
+	case Floor_CrushStop:
+	case Floor_Donut:
+	case Floor_LowerByTexture:
+	case Floor_LowerByValue:
+	case Floor_LowerByValueTimes8:
+	case Floor_LowerInstant:
+	case Floor_LowerToHighest:
+	case Floor_LowerToHighestEE:
+	case Floor_LowerToLowest:
+	case Floor_LowerToLowestCeiling:
+	case Floor_LowerToLowestTxTy:
+	case Floor_LowerToNearest:
+	case Floor_MoveToValue:
+	case Floor_MoveToValueAndCrush:
+	case Floor_MoveToValueTimes8:
+	case Floor_RaiseAndCrush:
+	case Floor_RaiseAndCrushDoom:
+	case Floor_RaiseByTexture:
+	case Floor_RaiseByValue:
+	case Floor_RaiseByValueTimes8:
+	case Floor_RaiseByValueTxTy:
+	case Floor_RaiseInstant:
+	case Floor_RaiseToCeiling:
+	case Floor_RaiseToHighest:
+	case Floor_RaiseToLowest:
+	case Floor_RaiseToLowestCeiling:
+	case Floor_RaiseToNearest:
+	case Floor_Stop:
+	case Floor_ToCeilingInstant:
+	case Floor_TransferNumeric:
+	case Floor_TransferTrigger:
+	case Floor_Waggle:
+	case FloorAndCeiling_LowerByValue:
+	case FloorAndCeiling_LowerRaise:
+	case FloorAndCeiling_RaiseByValue:
+	case Generic_Ceiling:
+	case Generic_Crusher:
+	case Generic_Crusher2:
+	case Generic_Door:
+	case Generic_Floor:
+	case Generic_Lift:
+	case Generic_Stairs:
+	case Pillar_Build:
+	case Pillar_BuildAndCrush:
+	case Pillar_Open:
+	case Plat_DownByValue:
+	case Plat_DownWaitUpStay:
+	case Plat_DownWaitUpStayLip:
+	case Plat_PerpetualRaise:
+	case Plat_PerpetualRaiseLip:
+	case Plat_RaiseAndStayTx0:
+	case Plat_Stop:
+	case Plat_ToggleCeiling:
+	case Plat_UpByValue:
+	case Plat_UpByValueStayTx:
+	case Plat_UpNearestWaitDownStay:
+	case Plat_UpWaitDownStay:
+	case Stairs_BuildDown:
+	case Stairs_BuildDownDoom:
+	case Stairs_BuildDownDoomSync:
+	case Stairs_BuildDownSync:
+	case Stairs_BuildUp:
+	case Stairs_BuildUpDoom:
+	case Stairs_BuildUpDoomCrush:
+	case Stairs_BuildUpDoomSync:
+	case Stairs_BuildUpSync:
+	case Transfer_CeilingLight:
+	case Transfer_FloorLight:
+	case Transfer_Heights:
+	case Transfer_WallLight:
+		return ld->args[0];
+	default:
+		return -1;
+	}
+}
 #endif
 
 void MapLoader::LoadLineDefs (MapData * map)
@@ -1685,11 +1816,6 @@ void MapLoader::LoadLineDefs (MapData * map)
 	int numlines = mldf.Size() / sizeof(maplinedef_t);
 	int numsides = map->Size(ML_SIDEDEFS) / sizeof(mapsidedef_t);
 	linemap.Resize(numlines);
-
-#if HAVE_RT
-	rt_linesToSpecialAndTag.clear();
-	rt_linesToSpecialAndTag.resize( numlines );
-#endif
 
 	// [RH] Count the number of sidedef references. This is the number of
 	// sidedefs we need. The actual number in the SIDEDEFS lump might be less.
@@ -1723,6 +1849,12 @@ void MapLoader::LoadLineDefs (MapData * map)
 			i++;
 		}
 	}
+
+#if HAVE_RT
+	rt_linesToSpecialAndTag.clear();
+	rt_linesToSpecialAndTag.resize( numlines );
+#endif
+
 	Level->lines.Alloc(numlines);
 	memset(&Level->lines[0], 0, numlines * sizeof(line_t));
 
@@ -1840,6 +1972,12 @@ void MapLoader::LoadLineDefs2 (MapData * map)
 	{
 		ForceNodeBuild = true;
 	}
+
+#if HAVE_RT
+	rt_linesToSpecialAndTag.clear();
+	rt_linesToSpecialAndTag.resize( numlines );
+#endif
+
 	Level->lines.Alloc(numlines);
 	memset(&Level->lines[0], 0, numlines * sizeof(line_t));
 
@@ -1870,6 +2008,9 @@ void MapLoader::LoadLineDefs2 (MapData * map)
 		ld->AdjustLine ();
 		SetLineID(i, ld);
 		SaveLineSpecial (ld);
+#if HAVE_RT
+		rt_linesToSpecialAndTag[ i ] = { ld->special, RT_GetSectorTagArgForExportability( ld ) };
+#endif
 		if (Level->flags2 & LEVEL2_CLIPMIDTEX) ld->flags |= ML_CLIP_MIDTEX;
 		if (Level->flags2 & LEVEL2_WRAPMIDTEX) ld->flags |= ML_WRAP_MIDTEX;
 		if (Level->flags2 & LEVEL2_CHECKSWITCHRANGE) ld->flags |= ML_CHECKSWITCHRANGE;

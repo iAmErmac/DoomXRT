@@ -31,7 +31,9 @@ class Mace : HereticWeapon
 	Fire:
 		MACE B 4;
 	Hold:
+		MACE C 0 A_Light1;
 		MACE CDEF 3 A_FireMacePL1;
+		MACE C 0 A_Light0;
 		MACE C 4 A_ReFire;
 		MACE DEFB 4;
 		Goto Ready;
@@ -105,8 +107,10 @@ class MacePowered : Mace
 	Fire:
 	Hold:	
 		MACE B 4;
+		MACE D 0 A_Light2;
 		MACE D 4 A_FireMacePL2;
 		MACE B 4;
+		MACE A 0 A_Light0;
 		MACE A 8 A_ReFire;
 		Goto Ready;
 	}

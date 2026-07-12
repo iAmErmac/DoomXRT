@@ -1,0 +1,20 @@
+{
+    "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}",
+    "cmake.useCMakePresets": "never",
+    "cmake.configureOnOpen": false,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4,
+    "editor.detectIndentation": false,
+    "editor.multiCursorModifier": "alt",
+    "C_Cpp.formatting": "clangFormat",
+    "editor.formatOnSave": true,
+    "clang-format.style": "file",
+    "C_Cpp.codeAnalysis.clangTidy.enabled": true,
+    "C_Cpp.codeAnalysis.clangTidy.useBuildPath": true,
+    "C_Cpp.errorSquiggles": "enabled",
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "editor.rulers": [
+        185
+    ]
+}

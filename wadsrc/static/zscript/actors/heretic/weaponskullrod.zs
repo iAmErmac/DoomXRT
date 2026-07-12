@@ -29,7 +29,9 @@ class SkullRod : HereticWeapon
 		HROD A 1 A_Raise;
 		Loop;
 	Fire:
+		HROD A 0 A_Light2;
 		HROD AB 4 A_FireSkullRodPL1;
+		HROD B 0 A_Light0;
 		HROD B 0 A_ReFire;
 		Goto Ready;
 	}
@@ -82,10 +84,12 @@ class SkullRodPowered : SkullRod
 		HROD D 3;
 		HROD E 2;
 		HROD F 3;
+		HROD G 0 A_Light2;
 		HROD G 4 A_FireSkullRodPL2;
 		HROD F 2;
 		HROD E 3;
 		HROD D 2;
+		HROD C 0 A_Light0;
 		HROD C 2 A_ReFire;
 		Goto Ready;
 	}

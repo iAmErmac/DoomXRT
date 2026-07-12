@@ -125,14 +125,15 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 		actor ? RtPrim::Identity :
 		RtPrim::Particle);
 	auto rtxexp = rtstate.push_type(
-		actor ? RtPrim::ExportInstance : RtPrim::Identity);
-	auto rttemp = rtstate.push_uniqueid(
+		actor && !rt_isspriteshadow ? RtPrim::ExportInstance : RtPrim::Identity);
+	auto rttemp = rtstate.push_uniqueid<RtManyPrimsPerId::Set2>(
 		actor
 		? static_cast<void*>(actor)
-		: static_cast<void*>(particle));
+		: static_cast<void*>(particle),
+		actor && rt_isspriteshadow ? 1 : actor ? 0 : 2);
 
 	auto rtname = rtstate.push_exportinstance_name(
-		actor && (actor->sprite >= 0 && actor->sprite < sprites.SSize()) ? sprites[actor->sprite].name : nullptr,
+		actor && !rt_isspriteshadow && (actor->sprite >= 0 && actor->sprite < sprites.SSize()) ? sprites[actor->sprite].name : nullptr,
 		actor ? actor->frame : 0
 	);
 	static_assert(RT_MAX_SPRITE_FRAMES == MAX_SPRITE_FRAMES, "change RT_MAX_SPRITE_FRAMES to match");
@@ -1271,6 +1272,9 @@ void HWSprite::Process(HWDrawInfo *di, AActor* thing, sector_t * sector, area_t 
 	// end of light calculation
 
 	actor = thing;
+#if HAVE_RT
+	rt_isspriteshadow = isSpriteShadow;
+#endif
 	index = thing->SpawnOrder;
 
 	// sprite shadows should have a fixed index of -1 (ensuring they're drawn behind particles which have index 0)
@@ -1347,6 +1351,9 @@ void HWSprite::ProcessParticle (HWDrawInfo *di, particle_t *particle, sector_t *
 	actor = nullptr;
 	this->particle = particle;
 	fullbright = particle->bright;
+#if HAVE_RT
+	rt_isspriteshadow = false;
+#endif
 
 	if (di->isFullbrightScene()) 
 	{

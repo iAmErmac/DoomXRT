@@ -63,10 +63,6 @@ void Draw2D(F2DDrawer* drawer, FRenderState& state)
 
 void Draw2D(F2DDrawer* drawer, FRenderState& state, int x, int y, int width, int height)
 {
-#if HAVE_RT
-		auto rttemp = rtstate.push_uniqueid(drawer);
-#endif
-
 	twoD.Clock();
 
 	state.SetViewport(x, y, width, height);
@@ -88,6 +84,11 @@ void Draw2D(F2DDrawer* drawer, FRenderState& state, int x, int y, int width, int
 		twoD.Unclock();
 		return;
 	}
+
+#if HAVE_RT
+	auto rttemp = rtstate.push_uniqueid<RtManyPrimsPerId::Set0>(
+		reinterpret_cast<uint64_t>(drawer) ^ 0x2000000000000000ull);
+#endif
 
 	if (drawer->mIsFirstPass)
 	{

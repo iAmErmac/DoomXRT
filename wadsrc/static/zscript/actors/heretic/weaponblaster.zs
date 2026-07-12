@@ -33,8 +33,10 @@ class Blaster : HereticWeapon
 	Fire:
 		BLSR BC 3;
 	Hold:
+		BLSR D 0 A_Light1;
 		BLSR D 2 A_FireBlasterPL1;
 		BLSR CB 2;
+		BLSR A 0 A_Light0;
 		BLSR A 0 A_ReFire;
 		Goto Ready;
 	}
@@ -76,6 +78,7 @@ class Blaster : HereticWeapon
 	}
 }
 
+
 class BlasterPowered : Blaster
 {
 	Default
@@ -92,8 +95,10 @@ class BlasterPowered : Blaster
 	Fire:
 		BLSR BC 0;
 	Hold:
+		BLSR D 0 A_Light2;
 		BLSR D 3 A_FireProjectile("BlasterFX1");
 		BLSR CB 4;
+		BLSR A 0 A_Light0;
 		BLSR A 0 A_ReFire;
 		Goto Ready;
 	}

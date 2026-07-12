@@ -1,0 +1,187 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "linux-non-rt-Debug",
+      "displayName": "Linux non-rt Debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/Debug/non-rt",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "ZDOOM_EXE_NAME": {
+          "type": "STRING",
+          "value": "gzdoom"
+        },
+        "ZDOOM_OUTPUT_DIR": {
+          "type": "PATH",
+          "value": "${sourceDir}/build/Debug/non-rt"
+        },
+        "PK3_QUIET_ZIPDIR": "ON",
+        "ZMUSIC_INCLUDE_DIR": "${sourceDir}/libraries/ZMusic/include",
+        "ZMUSIC_LIBRARIES": "${sourceDir}/build/Debug/zmusic/source/libzmusic.so",
+        "CMAKE_BUILD_RPATH": "${sourceDir}/build/Debug/zmusic/source",
+        "HAVE_RT": "OFF"
+      }
+    },
+    {
+      "name": "linux-rt-Debug",
+      "displayName": "Linux rt Debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/Debug/rt",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "ZDOOM_EXE_NAME": {
+          "type": "STRING",
+          "value": "gzdoom"
+        },
+        "ZDOOM_OUTPUT_DIR": {
+          "type": "PATH",
+          "value": "${sourceDir}/build/Debug/rt"
+        },
+        "PK3_QUIET_ZIPDIR": "ON",
+        "ZMUSIC_INCLUDE_DIR": "${sourceDir}/libraries/ZMusic/include",
+        "ZMUSIC_LIBRARIES": "${sourceDir}/build/Debug/zmusic/source/libzmusic.so",
+        "CMAKE_BUILD_RPATH": "${sourceDir}/build/Debug/zmusic/source",
+        "HAVE_RT": "ON"
+      },
+      "environment": {
+        "RTGL1_SDK_PATH": "${sourceDir}/libraries/RTGL",
+        "RTGL1_LIBRARY_PATH": "${sourceDir}/build/Debug/rtgl/libRTGL1.so"
+      }
+    },
+    {
+      "name": "linux-non-rt-RelWithDebInfo",
+      "displayName": "Linux non-rt RelWithDebInfo",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/RelWithDebInfo/non-rt",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "ZDOOM_EXE_NAME": {
+          "type": "STRING",
+          "value": "gzdoom"
+        },
+        "ZDOOM_OUTPUT_DIR": {
+          "type": "PATH",
+          "value": "${sourceDir}/build/RelWithDebInfo/non-rt"
+        },
+        "PK3_QUIET_ZIPDIR": "ON",
+        "ZMUSIC_INCLUDE_DIR": "${sourceDir}/libraries/ZMusic/include",
+        "ZMUSIC_LIBRARIES": "${sourceDir}/build/RelWithDebInfo/zmusic/source/libzmusic.so",
+        "CMAKE_BUILD_RPATH": "${sourceDir}/build/RelWithDebInfo/zmusic/source",
+        "HAVE_RT": "OFF"
+      }
+    },
+    {
+      "name": "linux-rt-RelWithDebInfo",
+      "displayName": "Linux rt RelWithDebInfo",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/RelWithDebInfo/rt",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "ZDOOM_EXE_NAME": {
+          "type": "STRING",
+          "value": "gzdoom"
+        },
+        "ZDOOM_OUTPUT_DIR": {
+          "type": "PATH",
+          "value": "${sourceDir}/build/RelWithDebInfo/rt"
+        },
+        "PK3_QUIET_ZIPDIR": "ON",
+        "ZMUSIC_INCLUDE_DIR": "${sourceDir}/libraries/ZMusic/include",
+        "ZMUSIC_LIBRARIES": "${sourceDir}/build/RelWithDebInfo/zmusic/source/libzmusic.so",
+        "CMAKE_BUILD_RPATH": "${sourceDir}/build/RelWithDebInfo/zmusic/source",
+        "HAVE_RT": "ON"
+      },
+      "environment": {
+        "RTGL1_SDK_PATH": "${sourceDir}/libraries/RTGL",
+        "RTGL1_LIBRARY_PATH": "${sourceDir}/build/RelWithDebInfo/rtgl/libRTGL1.so"
+      }
+    },
+    {
+      "name": "linux-non-rt-Release",
+      "displayName": "Linux non-rt Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/Release/non-rt",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "ZDOOM_EXE_NAME": {
+          "type": "STRING",
+          "value": "gzdoom"
+        },
+        "ZDOOM_OUTPUT_DIR": {
+          "type": "PATH",
+          "value": "${sourceDir}/build/Release/non-rt"
+        },
+        "PK3_QUIET_ZIPDIR": "ON",
+        "ZMUSIC_INCLUDE_DIR": "${sourceDir}/libraries/ZMusic/include",
+        "ZMUSIC_LIBRARIES": "${sourceDir}/build/Release/zmusic/source/libzmusic.so",
+        "CMAKE_BUILD_RPATH": "${sourceDir}/build/Release/zmusic/source",
+        "HAVE_RT": "OFF"
+      }
+    },
+    {
+      "name": "linux-rt-Release",
+      "displayName": "Linux rt Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/Release/rt",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "ZDOOM_EXE_NAME": {
+          "type": "STRING",
+          "value": "gzdoom"
+        },
+        "ZDOOM_OUTPUT_DIR": {
+          "type": "PATH",
+          "value": "${sourceDir}/build/Release/rt"
+        },
+        "PK3_QUIET_ZIPDIR": "ON",
+        "ZMUSIC_INCLUDE_DIR": "${sourceDir}/libraries/ZMusic/include",
+        "ZMUSIC_LIBRARIES": "${sourceDir}/build/Release/zmusic/source/libzmusic.so",
+        "CMAKE_BUILD_RPATH": "${sourceDir}/build/Release/zmusic/source",
+        "HAVE_RT": "ON"
+      },
+      "environment": {
+        "RTGL1_SDK_PATH": "${sourceDir}/libraries/RTGL",
+        "RTGL1_LIBRARY_PATH": "${sourceDir}/build/Release/rtgl/libRTGL1.so"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-non-rt-Debug",
+      "displayName": "Build Linux non-rt Debug",
+      "configurePreset": "linux-non-rt-Debug"
+    },
+    {
+      "name": "linux-rt-Debug",
+      "displayName": "Build Linux rt Debug",
+      "configurePreset": "linux-rt-Debug"
+    },
+    {
+      "name": "linux-non-rt-RelWithDebInfo",
+      "displayName": "Build Linux non-rt RelWithDebInfo",
+      "configurePreset": "linux-non-rt-RelWithDebInfo"
+    },
+    {
+      "name": "linux-rt-RelWithDebInfo",
+      "displayName": "Build Linux rt RelWithDebInfo",
+      "configurePreset": "linux-rt-RelWithDebInfo"
+    },
+    {
+      "name": "linux-non-rt-Release",
+      "displayName": "Build Linux non-rt Release",
+      "configurePreset": "linux-non-rt-Release"
+    },
+    {
+      "name": "linux-rt-Release",
+      "displayName": "Build Linux rt Release",
+      "configurePreset": "linux-rt-Release"
+    }
+  ]
+}

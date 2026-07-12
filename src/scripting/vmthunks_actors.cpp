@@ -2254,4 +2254,19 @@ DEFINE_ACTION_FUNCTION_NATIVE( AActor, A_RtShowTitle, A_RtShowTitle )
 	return 0;
 }
 
+#else
+
+void A_RtShowTitle( AActor* self, int titleid, double duration_seconds, double fadeout_seconds )
+{
+}
+
+DEFINE_ACTION_FUNCTION_NATIVE( AActor, A_RtShowTitle, A_RtShowTitle )
+{
+	PARAM_SELF_PROLOGUE( AActor );
+	PARAM_INT( titleid );
+	PARAM_FLOAT( duration_seconds );
+	PARAM_FLOAT( fadeout_seconds );
+	return 0;
+}
+
 #endif

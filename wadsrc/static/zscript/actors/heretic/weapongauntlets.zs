@@ -35,6 +35,7 @@ class Gauntlets : Weapon
 		GAUN B 4 A_StartSound("weapons/gauntletsuse", CHAN_WEAPON);
 		GAUN C 4;
 	Hold:
+		GAUN D 0 A_Light1;
 		GAUN DEF 4 BRIGHT A_GauntletAttack(0);
 		GAUN C 4 A_ReFire;
 		GAUN B 4 A_Light0;
@@ -170,6 +171,7 @@ class GauntletsPowered : Gauntlets
 		GAUN J 4 A_StartSound("weapons/gauntletsuse", CHAN_WEAPON);
 		GAUN K 4;
 	Hold:
+		GAUN L 0 A_Light2;
 		GAUN LMN 4 BRIGHT A_GauntletAttack(1);
 		GAUN K 4 A_ReFire;
 		GAUN J 4 A_Light0;

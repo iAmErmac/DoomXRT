@@ -1,0 +1,41 @@
+id = "heretic-voxels"
+title = "Reikall's Heretic/Raven voxels"
+recipe = "../recipes/heretic_voxels.py"
+default_variant = "lite"
+game_autoload = "heretic"
+asset_policy = "external"
+
+[source]
+default_library = "~/Games/gzdoom-rt/mods"
+env = "RT_MODS_DIR"
+
+[runtime]
+rt_env = "RT_DATA_DIR"
+iwad_env = "HERETIC_IWAD"
+default_iwad = "~/Games/gzdoom-rt/wad/heretic.wad"
+generated_pk3_dir = "rt/autoload/heretic"
+textures_json = "rt/data/textures.json"
+
+[variants.lite]
+filename = "reikallravenvoxelslite.pk3"
+sha256 = "03da4e089a9577002050cab94db6c5a02747d71a8ca08951d902bbaae03e67d9"
+generated_filename = "reikallravenvoxelslite-rt.pk3"
+path = "heretic-voxels/reikall-lite-03da4e08"
+
+[variants.full]
+filename = "reikallhereticvoxels.pk3"
+sha256 = "f55ce7cd1de4708dd4e78fb9e5f74a1cb4a7b8edffef0ee6d0a1e22ef254a6b9"
+generated_filename = "reikallhereticvoxels-rt.pk3"
+path = "heretic-voxels/reikall-full-f55ce7cd"
+
+[recipe_steps]
+sanitize_voxeldef = true
+generate_voxel_texture_aliases = true
+parse_gldefs_for_missing_aliases = true
+mark_textures_json_block = "BEGIN RT MOD heretic-voxels"
+backup_textures_json = "textures.json.before-heretic-voxels*"
+uninstall_command = "tools/rt-mods/install-mod.sh heretic-voxels --uninstall"
+
+[notes]
+license = "The original readme asks users to link to the mod rather than redistribute assets. Keep PK3 files out of git."
+uninstall = "Use the recipe uninstall option. It removes generated PK3s and recipe-owned RT metadata without restoring the whole shared textures.json file."

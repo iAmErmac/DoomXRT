@@ -116,6 +116,7 @@ FGameConfigFile::FGameConfigFile ()
 		SetValueForKey ("Path", "$HOME", true);
 		SetValueForKey ("Path", "$PROGDIR", true);
 #else
+		SetValueForKey ("Path", "$HOME/Games/gzdoom-rt/wad", true);
 		SetValueForKey ("Path", "$HOME/" GAME_DIR, true);
 		SetValueForKey ("Path", "$HOME/.local/share/games/doom", true);
 		// Arch Linux likes them in /usr/share/doom
@@ -140,6 +141,8 @@ FGameConfigFile::FGameConfigFile ()
 #elif !defined(__unix__)
 		SetValueForKey ("Path", "$PROGDIR", true);
 #else
+		SetValueForKey ("Path", "$HOME/Games/gzdoom-rt/wad", true);
+		SetValueForKey ("Path", "$HOME/Games/gzdoom-rt/mods", true);
 		SetValueForKey ("Path", "$HOME/" GAME_DIR, true);
 		SetValueForKey ("Path", "$HOME/.local/share/games/doom", true);
 		SetValueForKey ("Path", SHARE_DIR, true);
