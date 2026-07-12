@@ -1048,7 +1048,6 @@ set (PCH_SOURCES
 	common/textures/formats/anmtexture.cpp
 	common/textures/formats/startscreentexture.cpp
 	common/textures/formats/qoitexture.cpp
-	common/textures/formats/webptexture.cpp
 	common/textures/hires/hqresize.cpp
 	common/models/models_md3.cpp
 	common/models/models_md2.cpp
@@ -1245,21 +1244,35 @@ set( GAME_SOURCES
 
 )
 
+if( HAVE_WEBP )
+	list( APPEND GAME_SOURCES common/textures/formats/webptexture.cpp )
+endif()
+
 set( GAME_NONPCH_SOURCES ${GAME_SOURCES} )
 list( REMOVE_ITEM GAME_NONPCH_SOURCES ${PCH_SOURCES} )
 
 add_executable( zdoom WIN32 MACOSX_BUNDLE ${GAME_SOURCES} )
 
 if( HAVE_RT )
-	if ( DEFINED ENV{RTGL1_SDK_PATH} )
-		include_directories( $ENV{RTGL1_SDK_PATH}/Include )
+	if( RTGL1_SDK_PATH )
+		include_directories( "${RTGL1_SDK_PATH}/Include" )
 		# VS hot reload
 		if ( MSVC AND WIN32 AND NOT MSVC_VERSION VERSION_LESS 142 )
 			target_link_options( zdoom PRIVATE $<$<CONFIG:Debug>:/INCREMENTAL> )
 			target_compile_options( zdoom PRIVATE $<$<CONFIG:Debug>:/ZI> )
 		endif()
+
+		if( MSVC AND WIN32 )
+			add_custom_command( TARGET zdoom POST_BUILD
+				COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:zdoom>/rt/bin"
+				COMMAND ${CMAKE_COMMAND} -E copy_if_different
+					"${RTGL1_SDK_PATH}/Build/bin/RTGL1.dll"
+					"$<TARGET_FILE_DIR:zdoom>/rt/bin/RTGL1.dll"
+				COMMENT "Copying RTGL1.dll..."
+			)
+		endif()
 	else()
-		message(FATAL_ERROR "Environment variable RTGL1_SDK_PATH is not set. It should point to RTGL1 library directory")
+		message( FATAL_ERROR "Set RTGL1_SDK_PATH to the RTGL1 SDK root directory (for example D:/game_dev/RTGL)" )
 	endif()
 endif()
 

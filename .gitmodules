@@ -1,3 +1,9 @@
 [submodule "src/common/rendering/rt/unordered_dense"]
 	path = src/common/rendering/rt/unordered_dense
-	url = C:/Dev/gzdoom/src/common/rendering/rt
+	url = https://github.com/martinus/unordered_dense.git
+[submodule "libraries/ZMusic"]
+	path = libraries/ZMusic
+	url = https://github.com/iAmErmac/ZMusic.git
+[submodule "libraries/RTGL"]
+	path = libraries/RTGL
+	url = https://github.com/iAmErmac/RTGL.git
