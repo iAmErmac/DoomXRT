@@ -343,8 +343,12 @@ static void LevelStatEntry(FSessionStatistics *es, const char *level, const char
 	time (&clock);
 	lt = localtime (&clock);
 
-	strcpy(s.name, level);
-	strcpy(s.info, text);
+	strncpy(s.name, level, sizeof(s.name) - 1);
+	s.name[sizeof(s.name) - 1] = '\0';
+
+	strncpy(s.info, text, sizeof(s.info) - 1);
+	s.info[sizeof(s.info) - 1] = '\0';
+
 	s.timeneeded=playtime;
 	es->levelstats.Push(s);
 }
@@ -469,7 +473,7 @@ void STAT_ChangeLevel(const char *newl, FLevelLocals *Level)
 			section.ToUpper();
 
 			const char *ep_name = StartEpisode->mEpisodeName.GetChars();
-			if (*ep_name == '$') ep_name = GStrings(ep_name+1);
+			if (*ep_name == '$') ep_name = GStrings.GetString(ep_name+1);
 			FStatistics *sl = GetStatisticsList(EpisodeStatistics, section.GetChars(), ep_name);
 
 			int statvals[6] = {0,0,0,0,0,0};
@@ -602,7 +606,7 @@ CCMD(finishgame)
 		return;
 	}
 	// This CCMD simulates an end-of-game action and exists to end mods that never exit their last Level->
-	Net_WriteByte(DEM_FINISHGAME);
+	Net_WriteInt8(DEM_FINISHGAME);
 }
 
 ADD_STAT(statistics)

@@ -178,7 +178,7 @@ public:
 
 	int GetEntryNamespace(uint32_t entry)
 	{
-		return (entry < NumLumps) ? Entries[entry].Namespace : ns_hidden;
+		return (entry < NumLumps) ? Entries[entry].Namespace : (int)ns_hidden;
 	}
 
 	int GetEntryResourceID(uint32_t entry)
@@ -191,7 +191,7 @@ public:
 		return (entry < NumLumps) ? Entries[entry].FileName : nullptr;
 	}
 
-	virtual FileData Read(int entry);
+	virtual FileData Read(uint32_t entry);
 
 	virtual FCompressedBuffer GetRawData(uint32_t entry);
 

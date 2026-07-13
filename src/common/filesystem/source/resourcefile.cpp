@@ -35,7 +35,6 @@
 */
 
 #include <algorithm>
-
 #include <miniz.h>
 #include "resourcefile.h"
 #include "md5.hpp"
@@ -47,7 +46,7 @@
 #include "wildcards.hpp"
 
 namespace FileSys {
-	
+
 // this is for restricting shared file readers to the main thread.
 thread_local bool mainThread;
 void SetMainThread()
@@ -163,6 +162,7 @@ static int nulPrintf(FSMessageLevel msg, const char* fmt, ...)
 
 FResourceFile *FResourceFile::DoOpenResourceFile(const char *filename, FileReader &file, bool containeronly, LumpFilterInfo* filter, FileSystemMessageFunc Printf, StringPool* sp)
 {
+	if (!file.isOpen()) return nullptr;
 	if (Printf == nullptr) Printf = nulPrintf;
 	for(auto func : funcs)
 	{
@@ -331,6 +331,8 @@ void FResourceFile::GenerateHash()
 	{
 		auto name = getName(i);
 		auto size = Length(i);
+		if (name == nullptr) 
+			continue;
 		md5_append(&state, (const uint8_t*)name, (unsigned)strlen(name) + 1);
 		md5_append(&state, (const uint8_t*)&size, sizeof(size));
 	}
@@ -711,7 +713,7 @@ FileReader FResourceFile::GetEntryReader(uint32_t entry, int readertype, int rea
 	return fr;
 }
 
-FileData FResourceFile::Read(int entry)
+FileData FResourceFile::Read(uint32_t entry)
 {
 	if (!(Entries[entry].Flags & RESFF_COMPRESSED) && Reader.isOpen())
 	{

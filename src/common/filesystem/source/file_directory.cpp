@@ -44,10 +44,6 @@ namespace FileSys {
 	
 std::string FS_FullPath(const char* directory);
 
-#ifdef _WIN32
-std::wstring toWide(const char* str);
-#endif
-
 //==========================================================================
 //
 // Zip file
@@ -58,6 +54,8 @@ class FDirectory : public FResourceFile
 {
 	const bool nosubdir;
 	const char* mBasePath;
+	const char** SystemFilePath;
+
 
 	int AddDirectory(const char* dirpath, LumpFilterInfo* filter, FileSystemMessageFunc Printf);
 
@@ -102,12 +100,13 @@ int FDirectory::AddDirectory(const char *dirpath, LumpFilterInfo* filter, FileSy
 	{
 		mBasePath = nullptr;
 		AllocateEntries((int)list.size());
+		SystemFilePath = (const char**)stringpool->Alloc(list.size() * sizeof(const char*));
 		for(auto& entry : list)
 		{
 			if (mBasePath == nullptr)
 			{
 				// extract the base path from the first entry to cover changes made in ScanDirectory.
-				auto full = entry.FilePath.find(entry.FilePathRel);
+				auto full = entry.FilePath.rfind(entry.FilePathRel);
 				std::string path(entry.FilePath, 0, full);
 				mBasePath = stringpool->Strdup(path.c_str());
 			}
@@ -129,7 +128,14 @@ int FDirectory::AddDirectory(const char *dirpath, LumpFilterInfo* filter, FileSy
 						Printf(FSMessageLevel::Warning, "%s is larger than 2GB and will be ignored\n", entry.FilePath.c_str());
 						continue;
 					}
+					// for accessing the file we need to retain the original unaltered path.
+					// On Linux this is important because its file system is case sensitive,
+					// but even on Windows the Unicode normalization is destructive 
+					// for some characters and cannot be used for file names.
+					// Examples for this are the Turkish 'i's or the German ß.
+					SystemFilePath[count] = stringpool->Strdup(entry.FilePathRel.c_str());
 					// for internal access we use the normalized form of the relative path.
+					// this is fine because the paths that get compared against this will also be normalized.
 					Entries[count].FileName = NormalizeFileName(entry.FilePathRel.c_str());
 					// Keep the real filesystem path case for case-sensitive platforms.
 					Entries[count].SystemFilePath = stringpool->Strdup(entry.FilePathRel.c_str());
@@ -138,6 +144,7 @@ int FDirectory::AddDirectory(const char *dirpath, LumpFilterInfo* filter, FileSy
 					Entries[count].ResourceID = -1;
 					Entries[count].Method = METHOD_STORED;
 					Entries[count].Namespace = ns_global;
+					Entries[count].Position = count;
 					count++;
 				}
 			}
@@ -171,9 +178,7 @@ FileReader FDirectory::GetEntryReader(uint32_t entry, int readertype, int)
 	if (entry < NumLumps)
 	{
 		std::string fn = mBasePath;
-		fn += Entries[entry].SystemFilePath ?
-			Entries[entry].SystemFilePath :
-			Entries[entry].FileName;
+		fn += SystemFilePath[Entries[entry].Position];
 		fr.OpenFile(fn.c_str());
 		if (readertype == READER_CACHED)
 		{

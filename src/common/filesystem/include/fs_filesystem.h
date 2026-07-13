@@ -42,8 +42,8 @@ public:
 	void SetMaxIwadNum(int x) { MaxIwadIndex = x; }
 
 	bool InitSingleFile(const char *filename, FileSystemMessageFunc Printf = nullptr);
-	bool InitMultipleFiles (std::vector<std::string>& filenames, LumpFilterInfo* filter = nullptr, FileSystemMessageFunc Printf = nullptr, bool allowduplicates = false, FILE* hashfile = nullptr);
-	void AddFile (const char *filename, FileReader *wadinfo, LumpFilterInfo* filter, FileSystemMessageFunc Printf, FILE* hashfile);
+	bool InitMultipleFiles (std::vector<std::string>& filenames, LumpFilterInfo* filter = nullptr, FileSystemMessageFunc Printf = nullptr, bool allowduplicates = false);
+	void AddFile (const char *filename, FileReader *wadinfo, LumpFilterInfo* filter, FileSystemMessageFunc Printf);
 	int CheckIfResourceFileLoaded (const char *name) noexcept;
 	void AddAdditionalFile(const char* filename, FileReader* wadinfo = NULL) {}
 
@@ -154,20 +154,20 @@ protected:
 	std::vector<LumpRecord> FileInfo;
 
 	std::vector<uint32_t> Hashes;	// one allocation for all hash lists.
-	uint32_t *FirstLumpIndex;	// [RH] Hashing stuff moved out of lumpinfo structure
-	uint32_t *NextLumpIndex;
+	uint32_t *FirstLumpIndex = nullptr;	// [RH] Hashing stuff moved out of lumpinfo structure
+	uint32_t *NextLumpIndex = nullptr;
 
-	uint32_t *FirstLumpIndex_FullName;	// The same information for fully qualified paths from .zips
-	uint32_t *NextLumpIndex_FullName;
+	uint32_t *FirstLumpIndex_FullName = nullptr;	// The same information for fully qualified paths from .zips
+	uint32_t *NextLumpIndex_FullName = nullptr;
 
-	uint32_t *FirstLumpIndex_NoExt;	// The same information for fully qualified paths from .zips
-	uint32_t *NextLumpIndex_NoExt;
+	uint32_t *FirstLumpIndex_NoExt = nullptr;	// The same information for fully qualified paths from .zips
+	uint32_t *NextLumpIndex_NoExt = nullptr;
 
-	uint32_t* FirstLumpIndex_ResId;	// The same information for fully qualified paths from .zips
-	uint32_t* NextLumpIndex_ResId;
+	uint32_t* FirstLumpIndex_ResId = nullptr;	// The same information for fully qualified paths from .zips
+	uint32_t* NextLumpIndex_ResId = nullptr;
 
 	uint32_t NumEntries = 0;					// Not necessarily the same as FileInfo.Size()
-	uint32_t NumWads;
+	uint32_t NumWads = 0;
 
 	int IwadIndex = -1;
 	int MaxIwadIndex = -1;

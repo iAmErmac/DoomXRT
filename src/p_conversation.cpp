@@ -62,7 +62,7 @@
 #include "doommenu.h"
 #include "g_game.h"
 
-static FRandom pr_randomspeech("RandomSpeech");
+static FCRandom pr_randomspeech("RandomSpeech");
 
 static int ConversationMenuY;
 
@@ -276,17 +276,17 @@ DEFINE_ACTION_FUNCTION(DConversationMenu, SendConversationReply)
 	switch (node)
 	{
 	case -1:
-		Net_WriteByte(DEM_CONVNULL);
+		Net_WriteInt8(DEM_CONVNULL);
 		break;
 
 	case -2:
-		Net_WriteByte(DEM_CONVCLOSE);
+		Net_WriteInt8(DEM_CONVCLOSE);
 		break;
 
 	default:
-		Net_WriteByte(DEM_CONVREPLY);
-		Net_WriteWord(node);
-		Net_WriteByte(reply);
+		Net_WriteInt8(DEM_CONVREPLY);
+		Net_WriteInt16(node);
+		Net_WriteInt8(reply);
 		break;
 	}
 	StaticLastReply = reply;
@@ -589,7 +589,7 @@ static void HandleReply(player_t *player, bool isconsole, int nodenum, int reply
 		const char *log = reply->LogString.GetChars();
 		if (log[0] == '$')
 		{
-			log = GStrings(log + 1);
+			log = GStrings.GetString(log + 1);
 		}
 
 		player->SetLogText(log);
@@ -677,8 +677,8 @@ void P_ConversationCommand (int netcode, int pnum, uint8_t **stream)
 	}
 	if (netcode == DEM_CONVREPLY)
 	{
-		int nodenum = ReadWord(stream);
-		int replynum = ReadByte(stream);
+		int nodenum = ReadInt16(stream);
+		int replynum = ReadInt8(stream);
 		HandleReply(player, pnum == consoleplayer, nodenum, replynum);
 	}
 	else
@@ -713,7 +713,7 @@ static void TerminalResponse (const char *str)
 		// handle string table replacement
 		if (str[0] == '$')
 		{
-			str = GStrings(str + 1);
+			str = GStrings.GetString(str + 1);
 		}
 
 		if (StatusBar != NULL)

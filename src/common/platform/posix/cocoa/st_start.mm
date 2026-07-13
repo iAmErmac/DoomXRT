@@ -45,7 +45,7 @@
 // ---------------------------------------------------------------------------
 
 
-FBasicStartupScreen::FBasicStartupScreen(int maxProgress, bool showBar)
+FBasicStartupScreen::FBasicStartupScreen(int maxProgress)
 : FStartupScreen(maxProgress)
 {
 	FConsoleWindow& consoleWindow = FConsoleWindow::GetInstance();
@@ -110,6 +110,11 @@ void FBasicStartupScreen::NetDone()
 	FConsoleWindow::GetInstance().NetDone();
 }
 
+void FBasicStartupScreen::NetClose()
+{
+	FConsoleWindow::GetInstance().NetClose();
+}
+
 bool FBasicStartupScreen::NetLoop(bool (*timerCallback)(void*), void* const userData)
 {
 	while (true)
@@ -132,7 +137,7 @@ bool FBasicStartupScreen::NetLoop(bool (*timerCallback)(void*), void* const user
 // ---------------------------------------------------------------------------
 
 
-FStartupScreen *FStartupScreen::CreateInstance(const int maxProgress, bool showprogress)
+FStartupScreen *FStartupScreen::CreateInstance(const int maxProgress)
 {
-	return new FBasicStartupScreen(maxProgress, showprogress);
+	return new FBasicStartupScreen(maxProgress);
 }

@@ -84,7 +84,7 @@ public:
 	using LangMap = TMap<uint32_t, StringMap>;
 	using StringMacroMap = TMap<FName, StringMacro>;
 
-	void LoadStrings(const char *language);
+	void LoadStrings(FileSys::FileSystem& fileSystem, const char *language);
 	void UpdateLanguage(const char* language);
 	StringMap GetDefaultStrings() { return allStrings[default_table]; }	// Dehacked needs these for comparison
 	void SetOverrideStrings(StringMap & map)
@@ -95,16 +95,13 @@ public:
 
 	const char *GetLanguageString(const char *name, uint32_t langtable, int gender = -1) const;
 	bool MatchDefaultString(const char *name, const char *content) const;
-	const char *GetString(const char *name, uint32_t *langtable, int gender = -1) const;
-	const char *operator() (const char *name) const;	// Never returns NULL
-	const char* operator() (const FString& name) const { return operator()(name.GetChars()); }
-	const char *operator[] (const char *name) const
-	{
-		return GetString(name, nullptr);
-	}
+	const char *CheckString(const char *name, uint32_t *langtable = nullptr, int gender = -1) const;
+	const char* GetString(const char* name) const;
+	const char* GetString(const FString& name) const { return GetString(name.GetChars()); }
 	bool exists(const char *name);
 
-	void InsertString(int lumpnum, int langid, FName label, const FString& string);
+	void InsertString(int filenum, int langid, FName label, const FString& string);
+	void SetDefaultGender(int gender) { defaultgender = gender; }
 
 private:
 
@@ -112,14 +109,15 @@ private:
 	StringMacroMap allMacros;
 	LangMap allStrings;
 	TArray<std::pair<uint32_t, StringMap*>> currentLanguageSet;
+	int defaultgender = 0;
 
 	void LoadLanguage (int lumpnum, const char* buffer, size_t size);
 	TArray<TArray<FString>> parseCSV(const char* buffer, size_t size);
-	bool ParseLanguageCSV(int lumpnum, const char* buffer, size_t size);
+	bool ParseLanguageCSV(int filenum, const char* buffer, size_t size);
 
-	bool readMacros(int lumpnum);
+	bool readMacros(const char* buffer, size_t size);
 	void DeleteString(int langid, FName label);
-	void DeleteForLabel(int lumpnum, FName label);
+	void DeleteForLabel(int filenum, FName label);
 
 	static size_t ProcessEscapes (char *str);
 public:
@@ -137,7 +135,7 @@ public:
 
 	const char* localize(const char* str)
 	{
-		return *str == '$' ? operator()(str + 1) : str;
+		return *str == '$' ? GetString(str + 1) : str;
 	}
 };
 

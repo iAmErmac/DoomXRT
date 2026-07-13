@@ -37,6 +37,7 @@
 #define FUDGEFACTOR		10
 
 static FRandom pr_teleport ("Teleport");
+static FRandom pr_playerteleport("PlayerTeleport");
 
 CVAR (Bool, telezoom, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG);
 
@@ -128,7 +129,15 @@ bool P_Teleport (AActor *thing, DVector3 pos, DAngle angle, int flags)
 			}
 			else
 			{
-				pos.Z = floorheight;
+				if (!(thing->Level->i_compatflags2 & COMPATF2_FDTELEPORT) || !(flags & TELF_FDCOMPAT) || floorheight > thing->Z())
+				{
+					pos.Z = floorheight;
+				}
+				else
+				{
+					pos.Z = thing->Z();
+				}
+
 				if (!(flags & TELF_KEEPORIENTATION))
 				{
 					resetpitch = false;
@@ -145,7 +154,16 @@ bool P_Teleport (AActor *thing, DVector3 pos, DAngle angle, int flags)
 		}
 		else
 		{
-			pos.Z = floorheight;
+			// emulation of Final Doom's teleport glitch.
+			// For walking monsters we still have to force them to the ground because the handling of off-ground monsters is different from vanilla.
+			if (!(thing->Level->i_compatflags2 & COMPATF2_FDTELEPORT) || !(flags & TELF_FDCOMPAT) || !(thing->flags & MF_NOGRAVITY) || floorheight > pos.Z)
+			{
+				pos.Z = floorheight;
+			}
+			else
+			{
+				pos.Z = thing->Z();
+			}
 		}
 	}
 	// [MK] notify thing of incoming teleport, check for an early cancel
@@ -245,7 +263,7 @@ DEFINE_ACTION_FUNCTION(AActor, Teleport)
 	PARAM_FLOAT(z);
 	PARAM_ANGLE(an);
 	PARAM_INT(flags);
-	ACTION_RETURN_BOOL(P_Teleport(self, DVector3(x, y, z), an, flags));
+	ACTION_RETURN_BOOL(P_Teleport(self, DVector3(x, y, z), an, flags & ~TELF_FDCOMPAT));
 }
 
 //-----------------------------------------------------------------------------
@@ -254,7 +272,7 @@ DEFINE_ACTION_FUNCTION(AActor, Teleport)
 //
 //-----------------------------------------------------------------------------
 
-AActor *FLevelLocals::SelectTeleDest (int tid, int tag, bool norandom)
+AActor *FLevelLocals::SelectTeleDest (int tid, int tag, bool norandom, bool isPlayer)
 {
 	AActor *searcher;
 
@@ -306,7 +324,8 @@ AActor *FLevelLocals::SelectTeleDest (int tid, int tag, bool norandom)
 		{
 			if (count != 1 && !norandom)
 			{
-				count = 1 + (pr_teleport() % count);
+				// Players get their own RNG seed to reduce likelihood of breaking prediction.
+				count = 1 + ((isPlayer ? pr_playerteleport() : pr_teleport()) % count);
 			}
 			searcher = NULL;
 			while (count > 0)
@@ -377,7 +396,7 @@ bool FLevelLocals::EV_Teleport (int tid, int tag, line_t *line, int side, AActor
 	{ // Don't teleport if hit back of line, so you can get out of teleporter.
 		return 0;
 	}
-	searcher = SelectTeleDest(tid, tag, predicting);
+	searcher = SelectTeleDest(tid, tag, false, thing->player != nullptr && thing->player->mo == thing);
 	if (searcher == NULL)
 	{
 		return false;

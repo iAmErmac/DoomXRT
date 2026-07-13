@@ -55,6 +55,7 @@ class ListMenuDescriptor : MenuDescriptor native
 	native int mFontColor;
 	native int mFontColor2;
 	native bool mCenter;
+	native bool mCenterText;
 	native bool mAnimatedTransition;
 	native bool mAnimated;
 	native bool mDontBlur;
@@ -187,11 +188,12 @@ class ListMenu : Menu
 	override bool MenuEvent (int mkey, bool fromcontroller)
 	{
 		int oldSelect = mDesc.mSelectedItem;
-		int startedAt = max(0, mDesc.mSelectedItem);
+		int startedAt;
 
 		switch (mkey)
 		{
 		case MKEY_Up:
+			startedAt = mDesc.mSelectedItem < 0 ? 0 : mDesc.mSelectedItem;
 			do
 			{
 				if (--mDesc.mSelectedItem < 0) mDesc.mSelectedItem = mDesc.mItems.Size()-1;
@@ -202,6 +204,7 @@ class ListMenu : Menu
 			return true;
 
 		case MKEY_Down:
+			startedAt = mDesc.mSelectedItem < 0 ? mDesc.mItems.Size()-1 : mDesc.mSelectedItem;
 			do
 			{
 				if (++mDesc.mSelectedItem >= mDesc.mItems.Size()) mDesc.mSelectedItem = 0;

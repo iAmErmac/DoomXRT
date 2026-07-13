@@ -115,6 +115,8 @@ EXTERN_CVAR (Int, disableautosave)
 EXTERN_CVAR (String, playerclass)
 
 extern uint8_t globalfreeze, globalchangefreeze;
+int startpos = 0; // [RH] Support for multiple starts per level
+int laststartpos = 0;
 
 #define SNAP_ID			MAKE_ID('s','n','A','p')
 #define DSNP_ID			MAKE_ID('d','s','N','p')
@@ -665,7 +667,9 @@ void G_InitNew (const char *mapname, bool bTitleLevel)
 		gamestate = GS_LEVEL;
 	}
 	
-	G_DoLoadLevel (mapname, 0, false, !savegamerestore);
+	if (!savegamerestore)
+		startpos = laststartpos = 0;
+	G_DoLoadLevel (mapname, startpos, false, !savegamerestore);
 
 	if (!savegamerestore && (gameinfo.gametype == GAME_Strife || (SBarInfoScript[SCRIPT_CUSTOM] != nullptr && SBarInfoScript[SCRIPT_CUSTOM]->GetGameType() == GAME_Strife)))
 	{
@@ -682,7 +686,6 @@ void G_InitNew (const char *mapname, bool bTitleLevel)
 // G_DoCompleted
 //
 static FString	nextlevel;
-static int		startpos;	// [RH] Support for multiple starts per level
 extern int		NoWipe;		// [RH] Don't wipe when travelling in hubs
 static int		changeflags;
 static bool		unloading;
@@ -789,11 +792,12 @@ void FLevelLocals::ChangeLevel(const char *levelname, int position, int inflags,
 	{
 		if (thiscluster != nextcluster || (thiscluster && !(thiscluster->flags & CLUSTER_HUB)))
 		{
-			if (nextinfo->flags2 & LEVEL2_RESETINVENTORY)
+			const bool doReset = dmflags3 & DF3_PISTOL_START;
+			if (doReset || (nextinfo->flags2 & LEVEL2_RESETINVENTORY))
 			{
 				inflags |= CHANGELEVEL_RESETINVENTORY;
 			}
-			if (nextinfo->flags2 & LEVEL2_RESETHEALTH)
+			if (doReset || (nextinfo->flags2 & LEVEL2_RESETHEALTH))
 			{
 				inflags |= CHANGELEVEL_RESETHEALTH;
 			}
@@ -1112,7 +1116,6 @@ void G_DoCompleted (void)
 	if (gamestate == GS_TITLELEVEL)
 	{
 		G_DoLoadLevel (nextlevel, startpos, false, false);
-		startpos = 0;
 		viewactive = true;
 		return;
 	}
@@ -1333,7 +1336,7 @@ IMPLEMENT_CLASS(DAutosaver, false, false)
 
 void DAutosaver::Tick ()
 {
-	Net_WriteByte (DEM_CHECKAUTOSAVE);
+	Net_WriteInt8 (DEM_CHECKAUTOSAVE);
 	Destroy ();
 }
 
@@ -1385,7 +1388,6 @@ void G_DoLoadLevel(const FString &nextmapname, int position, bool autosave, bool
 void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool autosave, bool newGame)
 {
 	MapName = nextmapname;
-	static int lastposition = 0;
 	int i;
 
 	if (NextSkill >= 0)
@@ -1397,9 +1399,9 @@ void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool au
 	}
 
 	if (position == -1)
-		position = lastposition;
+		position = laststartpos;
 	else
-		lastposition = position;
+		laststartpos = position;
 
 	Init();
 	StatusBar->DetachAllMessages ();
@@ -1490,7 +1492,7 @@ void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool au
 		for (int i = 0; i<MAXPLAYERS; i++)
 		{
 			if (PlayerInGame(i) && Players[i]->mo != nullptr)
-				P_PlayerStartStomp(Players[i]->mo);
+				P_PlayerStartStomp(Players[i]->mo, !deathmatch);
 		}
 	}
 
@@ -1602,7 +1604,6 @@ void G_DoWorldDone (void)
 	}
 	primaryLevel->StartTravel ();
 	G_DoLoadLevel (nextlevel, startpos, true, false);
-	startpos = 0;
 	gameaction = ga_nothing;
 	viewactive = true; 
 }
@@ -1739,7 +1740,7 @@ int FLevelLocals::FinishTravel ()
 		pawn->flags2 &= ~MF2_BLASTED;
 		if (oldpawn != nullptr)
 		{
-			StaticPointerSubstitution (oldpawn, pawn);
+			PlayerPointerSubstitution (oldpawn, pawn, true);
 			oldpawn->Destroy();
 		}
 		if (pawndup != NULL)
@@ -1882,6 +1883,7 @@ void FLevelLocals::Init()
 	flags2 |= info->flags2;
 	flags3 |= info->flags3;
 	levelnum = info->levelnum;
+	LightningSound = info->LightningSound;
 	Music = info->Music;
 	musicorder = info->musicorder;
 	MusicVolume = 1.f;
@@ -2426,6 +2428,24 @@ void FLevelLocals::ApplyCompatibility2()
 	i_compatflags2 = GetCompatibility2(compatflags2) | ii_compatflags2;
 }
 
+AActor* FLevelLocals::SelectActorFromTID(int tid, size_t index, AActor* defactor)
+{
+	if (tid == 0)
+		return defactor;
+
+	AActor* actor = nullptr;
+	size_t cur = 0u;
+	auto it = GetActorIterator(tid);
+	while ((actor = it.Next()) != nullptr)
+	{
+		if (cur == index)
+			return actor;
+		++cur;
+	}
+
+	return nullptr;
+}
+
 //==========================================================================
 // IsPointInMap
 //
@@ -2476,7 +2496,7 @@ DEFINE_ACTION_FUNCTION(FLevelLocals, GetClusterName)
 	if (cluster)
 	{
 		if (cluster->flags & CLUSTER_LOOKUPNAME)
-			retval = GStrings(cluster->ClusterName);
+			retval = GStrings.GetString(cluster->ClusterName);
 		else
 			retval = cluster->ClusterName;
 	}

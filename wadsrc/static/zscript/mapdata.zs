@@ -17,15 +17,15 @@ struct SectorPortal native play
 		FLAG_INSKYBOX = 2,				// to avoid recursion
 	};
 
-	native int mType;
-	native int mFlags;
-	native uint mPartner;
-	native int mPlane;
-	native Sector mOrigin;
-	native Sector mDestination;
-	native Vector2 mDisplacement;
-	native double mPlaneZ;
-	native Actor mSkybox;	
+	native readonly int mType;
+	native internal readonly int mFlags;
+	native readonly uint mPartner;
+	native readonly int mPlane;
+	native readonly Sector mOrigin;
+	native internal readonly Sector mDestination;
+	native readonly Vector2 mDisplacement;
+	native readonly double mPlaneZ;
+	native internal readonly Actor mSkybox;	
 };
 
 struct LinePortal native play
@@ -58,16 +58,16 @@ struct LinePortal native play
 		PORG_CEILING,
 	};
 
-	native Line mOrigin;
-	native Line mDestination;
-	native Vector2 mDisplacement;
-	native uint8 mType;
-	native uint8 mFlags;
-	native uint8 mDefFlags;
-	native uint8 mAlign;
-	native double mAngleDiff;
-	native double mSinRot;
-	native double mCosRot;
+	native readonly Line mOrigin;
+	native readonly Line mDestination;
+	native readonly Vector2 mDisplacement;
+	native readonly uint8 mType;
+	native readonly uint8 mFlags;
+	native readonly uint8 mDefFlags;
+	native readonly uint8 mAlign;
+	native readonly double mAngleDiff;
+	native readonly double mSinRot;
+	native readonly double mCosRot;
 }
 
 struct Vertex native play
@@ -238,7 +238,7 @@ struct Line native play
 	native clearscope int Index() const;
 	native bool Activate(Actor activator, int side, int type);
 	native bool RemoteActivate(Actor activator, int side, int type, Vector3 pos);
-	native bool, double, double GetMidTexturePosition (int side);
+	native bool, double, double GetMidTexturePosition (int side) const;
 	
 	clearscope int GetUDMFInt(Name nm) const
 	{
@@ -262,16 +262,16 @@ struct Line native play
 
 struct SecPlane native play
 {
-	native Vector3 Normal;
-	native double D;
-	native double negiC;
+	native readonly Vector3 Normal;
+	native readonly double D;
+	native readonly double negiC;
 	
 	native clearscope bool isSlope() const;
 	native clearscope int PointOnSide(Vector3 pos) const;
 	native clearscope double ZatPoint (Vector2 v) const;
 	native clearscope double ZatPointDist(Vector2 v, double dist) const;
-	native clearscope bool isEqual(Secplane other) const;
-	native void ChangeHeight(double hdiff);
+	native clearscope bool isEqual(readonly<Secplane> other) const;
+	//native void ChangeHeight(double hdiff);
 	native clearscope double GetChangedHeight(double hdiff) const;
 	native clearscope double HeightDiff(double oldd, double newd = 1e37) const;
 	native clearscope double PointToDist(Vector2 xy, double z) const;
@@ -340,11 +340,11 @@ struct SecSpecial play
 
 struct FColormap
 {
-	Color		LightColor;
-	Color		FadeColor;
-	uint8		Desaturation;
-	uint8		BlendFactor;
-	uint16		FogDensity;
+	readonly Color	LightColor;
+	readonly Color	FadeColor;
+	readonly uint8	Desaturation;
+	readonly uint8	BlendFactor;
+	readonly uint16	FogDensity;
 }
 
 struct Sector native play
@@ -435,6 +435,11 @@ struct Sector native play
 		SECMF_UNDERWATERMASK	= 32+64,
 		SECMF_DRAWN			= 128,	// sector has been drawn at least once
 		SECMF_HIDDEN			= 256,	// Do not draw on textured automap
+		SECMF_OVERLAPPING		= 512,	// floor and ceiling overlap and require special renderer action.
+		SECMF_NOSKYWALLS		= 1024,	// Do not draw "sky walls"
+		SECMF_LIFT				= 2048,	// For MBF monster AI
+		SECMF_HURTMONSTERS		= 4096, // Monsters in this sector are hurt like players.
+		SECMF_HARMINAIR			= 8192, // Actors in this sector are also hurt mid-air.
 	}
 	native uint16		MoreFlags;
 	
@@ -452,6 +457,9 @@ struct Sector native play
 		SECF_ENDLEVEL		= 512,	// ends level when health goes below 10
 		SECF_HAZARD			= 1024,	// Change to Strife's delayed damage handling.
 		SECF_NOATTACK		= 2048,	// monsters cannot start attacks in this sector.
+		SECF_EXIT1			= 4096,
+		SECF_EXIT2			= 8192,
+		SECF_KILLMONSTERS	= 16384,// Monsters in this sector are instantly killed.
 
 		SECF_WASSECRET		= 1 << 30,	// a secret that was discovered
 		SECF_SECRET			= 1 << 31,	// a secret sector
@@ -472,8 +480,8 @@ struct Sector native play
 
 	native SectorAction		SecActTarget;
 
-	native internal uint		Portals[2];
-	native readonly int			PortalGroup;
+	native internal readonly uint	Portals[2];
+	native readonly int				PortalGroup;
 
 	native readonly int			sectornum;
 
@@ -545,6 +553,8 @@ struct Sector native play
 	native void ChangeLightLevel(int newval);
 	native void SetLightLevel(int newval);
 	native clearscope int GetLightLevel() const;
+	native void SetPlaneReflectivity(int pos, double val);
+	native clearscope double GetPlaneReflectivity(int pos);
 	native void AdjustFloorClip();
 	native clearscope bool IsLinked(Sector other, bool ceiling) const;
 

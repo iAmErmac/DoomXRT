@@ -5,6 +5,25 @@
 #include "textureid.h"
 #include "tarray.h"
 #include "s_soundinternal.h"
+#include "firetexture.h"
+
+struct FStandaloneAnimation
+{
+	double		SwitchTic;
+	uint32_t	AnimIndex;
+	uint16_t	CurFrame;
+	bool		ok = false;
+	uint8_t		AnimType;
+};
+
+static_assert(sizeof(FStandaloneAnimation) == sizeof(uint64_t)*2);
+
+struct FFireTexture
+{
+	uint32_t Duration; // Duration before updates.
+	uint64_t SwitchTime; // Absolute time before update.
+	FGameTexture* texture;
+};
 
 struct FAnimDef
 {
@@ -62,9 +81,11 @@ struct FDoorAnimation
 
 class FTextureAnimator
 {
+	TMap<FTextureID, uint16_t> mAnimationIndices;
 	TArray<FAnimDef> mAnimations;
 	TArray<FSwitchDef*> mSwitchDefs;
 	TArray<FDoorAnimation> mAnimatedDoors;
+	TArray<FFireTexture> mFireTextures;
 
 	void ParseAnim(FScanner& sc, ETextureType usetype);
 	FAnimDef* ParseRangeAnim(FScanner& sc, FTextureID picnum, ETextureType usetype, bool missing);
@@ -72,6 +93,7 @@ class FTextureAnimator
 	void ParseWarp(FScanner& sc);
 	void ParseCanvasTexture(FScanner& sc);
 	void ParseCameraTexture(FScanner& sc);
+	void ParseFireTexture(FScanner& sc);
 	FTextureID ParseFramenum(FScanner& sc, FTextureID basepicnum, ETextureType usetype, bool allowMissing);
 	void ParseTime(FScanner& sc, uint32_t& min, uint32_t& max);
 
@@ -112,6 +134,9 @@ public:
 		FixAnimations();
 		InitSwitchList();
 	}
+
+	bool InitStandaloneAnimation(FStandaloneAnimation &animInfo, FTextureID tex, uint32_t curTic);
+	FTextureID UpdateStandaloneAnimation(FStandaloneAnimation &animInfo, double curTic);
 };
 
 extern FTextureAnimator TexAnim;

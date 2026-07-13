@@ -39,7 +39,7 @@
 class FStartupScreen
 {
 public:
-	static FStartupScreen *CreateInstance(int max_progress, bool showprogress);
+	static FStartupScreen *CreateInstance(int max_progress);
 
 	FStartupScreen(int max_progress)
 	{
@@ -55,6 +55,7 @@ public:
 	virtual void NetInit(const char *message, int num_players) {}
 	virtual void NetProgress(int count) {}
 	virtual void NetDone() {}
+	virtual void NetClose() {}
 	virtual bool NetLoop(bool (*timer_callback)(void *), void *userdata) { return false; }
 	virtual void AppendStatusLine(const char* status) {}
 	virtual void LoadingStatus(const char* message, int colors) {}
@@ -66,7 +67,7 @@ protected:
 class FBasicStartupScreen : public FStartupScreen
 {
 public:
-	FBasicStartupScreen(int max_progress, bool show_bar);
+	FBasicStartupScreen(int max_progress);
 	~FBasicStartupScreen();
 
 	void Progress();
@@ -74,6 +75,7 @@ public:
 	void NetProgress(int count);
 	void NetMessage(const char* format, ...);	// cover for printf
 	void NetDone();
+	void NetClose();
 	bool NetLoop(bool (*timer_callback)(void*), void* userdata);
 protected:
 	int NetMaxPos, NetCurPos;

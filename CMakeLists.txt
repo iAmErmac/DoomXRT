@@ -283,7 +283,7 @@ if( MSVC )
 	# String pooling
 	# Function-level linking
 	# Disable run-time type information
-	set( ALL_C_FLAGS "/GF /Gy /permissive-" )
+	set( ALL_C_FLAGS "/GF /Gy /permissive- /utf-8" )
 
 	if ( HAVE_RT )
 		set( ALL_C_FLAGS "${ALL_C_FLAGS} /DHAVE_RT=1" )
@@ -392,6 +392,9 @@ mark_as_advanced( FORCE_INTERNAL_ASMJIT )
 if (HAVE_VULKAN)
 	add_subdirectory( libraries/ZVulkan )
 endif()
+
+add_subdirectory( libraries/ZWidget )
+add_subdirectory( libraries/webp )
 
 add_subdirectory( libraries/discordrpc EXCLUDE_FROM_ALL )
 set( DRPC_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libraries/discordrpc/include" )

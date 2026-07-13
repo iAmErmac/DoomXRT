@@ -204,7 +204,7 @@ class ListMenuItemStaticText : ListMenuItem
 		mText = text;
 		mFont = desc.mFont;
 		mColor = color >= 0? color : desc.mFontColor;
-		mCentered = false;
+		mCentered = desc.mCenterText;
 	}
 
 	void InitDirect(double x, double y, String text, Font font, int color = Font.CR_UNTRANSLATED, bool centered = false)
@@ -351,7 +351,12 @@ class ListMenuItemTextItem : ListMenuItemSelectable
 	override void Draw(bool selected, ListMenuDescriptor desc)
 	{
 		let font = menuDelegate.PickFont(mFont);
-		DrawText(desc, font, selected ? mColorSelected : mColor, mXpos, mYpos, mText);
+		double x = mXpos;
+		if (desc.mCenterText) 
+		{
+			x -= font.StringWidth(mText) / 2;
+		}
+		DrawText(desc, font, selected ? mColorSelected : mColor, x, mYpos, mText);
 	}
 
 	override int GetWidth()

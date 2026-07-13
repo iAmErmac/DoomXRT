@@ -49,6 +49,7 @@
 #include "vm.h"
 #include "i_system.h"
 #include "s_music.h"
+#include "i_music.h"
 
 using namespace FileSys;
 
@@ -134,6 +135,7 @@ enum SICommands
 	SI_Registered,
 	SI_ArchivePath,
 	SI_MusicVolume,
+	SI_Replaygain,
 	SI_MidiDevice,
 	SI_IfDoom,
 	SI_IfHeretic,
@@ -145,6 +147,7 @@ enum SICommands
 	SI_EDFOverride,
 	SI_Attenuation,
 	SI_PitchSet,
+	SI_ModPlayer,
 };
 
 // Blood was a cool game. If Monolith ever releases the source for it,
@@ -222,6 +225,7 @@ static const char *SICommandStrings[] =
 	"$registered",
 	"$archivepath",
 	"$musicvolume",
+	"$replaygain",
 	"$mididevice",
 	"$ifdoom",
 	"$ifheretic",
@@ -233,7 +237,8 @@ static const char *SICommandStrings[] =
 	"$edfoverride",
 	"$attenuation",
 	"$pitchset",
-	NULL
+	"$modplayer",
+	nullptr
 };
 
 static TArray<FSavedPlayerSoundInfo> SavedPlayerSounds;
@@ -568,6 +573,7 @@ void S_ClearSoundData()
 	MusicAliases.Clear();
 	MidiDevices.Clear();
 	HexenMusic.Clear();
+	ModPlayers.Clear();
 }
 
 //==========================================================================
@@ -1031,9 +1037,16 @@ static void S_AddSNDINFO (int lump)
 
 			case SI_MusicVolume: {
 				sc.MustGetString();
-				FName musname (sc.String);
-				sc.MustGetFloat();
-				MusicVolumes[musname] = (float)sc.Float;
+				int lumpnum = mus_cb.FindMusic(sc.String);
+				if (!sc.CheckFloat())
+				{
+					sc.MustGetString();
+					char* p;
+					double f = strtod(sc.String, &p);
+					if (!stricmp(p, "db")) sc.Float = dBToAmplitude((float)sc.Float);
+					else sc.ScriptError("Bad value for music volume: %s", sc.String);
+				}
+				if (lumpnum >= 0) MusicVolumes[lumpnum] = (float)sc.Float;
 				}
 				break;
 
@@ -1067,7 +1080,7 @@ static void S_AddSNDINFO (int lump)
 
 			case SI_MidiDevice: {
 				sc.MustGetString();
-				FName nm = sc.String;
+				int lumpnum = mus_cb.FindMusic(sc.String);
 				FScanner::SavedPos save = sc.SavePos();
 				
 				sc.SetCMode(true);
@@ -1099,9 +1112,23 @@ static void S_AddSNDINFO (int lump)
 					sc.RestorePos(save);
 					sc.MustGetString();
 				}
-				MidiDevices[nm] = devset;
+				if (lumpnum >= 0) MidiDevices.Insert(lumpnum, devset);
 				}
 				break;
+
+			case SI_ModPlayer: {
+				sc.MustGetString();
+				int lumpnum = mus_cb.FindMusic(sc.String);
+				int player;
+				FScanner::SavedPos save = sc.SavePos();
+
+				sc.MustGetString();
+				if (sc.Compare("XMP") || sc.Compare("libXMP")) player = 0;
+				else if (sc.Compare("dumb") || sc.Compare("libdumb")) player = 1;
+				else sc.ScriptError("Unknown Module player %s\n", sc.String);
+				if (lumpnum >= 0) ModPlayers.Insert(lumpnum, player);
+			}
+			break;
 
 			case SI_IfDoom: //also Chex
 			case SI_IfStrife:

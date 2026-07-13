@@ -40,6 +40,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "resourcefile.h"
 #include "fs_filesystem.h"
@@ -101,10 +102,6 @@ struct FileSystem::LumpRecord
 
 	void SetFromLump(FResourceFile* file, int fileindex, int filenum, StringPool* sp, const char* name = nullptr)
 	{
-		if (fileindex == 649 && filenum == 0)
-		{
-			int a = 0;
-		}
 		resfile = file;
 		resindex = fileindex;
 		rfnum = filenum;
@@ -241,7 +238,7 @@ bool FileSystem::InitSingleFile(const char* filename, FileSystemMessageFunc Prin
 	return InitMultipleFiles(filenames, nullptr, Printf);
 }
 
-bool FileSystem::InitMultipleFiles (std::vector<std::string>& filenames, LumpFilterInfo* filter, FileSystemMessageFunc Printf, bool allowduplicates, FILE* hashfile)
+bool FileSystem::InitMultipleFiles (std::vector<std::string>& filenames, LumpFilterInfo* filter, FileSystemMessageFunc Printf, bool allowduplicates)
 {
 	int numfiles;
 
@@ -255,7 +252,7 @@ bool FileSystem::InitMultipleFiles (std::vector<std::string>& filenames, LumpFil
 	stringpool->shared = true;	// will be used by all owned resource files.
 
 	// first, check for duplicates
-	if (allowduplicates)
+	if (!allowduplicates)
 	{
 		for (size_t i=0;i<filenames.size(); i++)
 		{
@@ -272,7 +269,7 @@ bool FileSystem::InitMultipleFiles (std::vector<std::string>& filenames, LumpFil
 
 	for(size_t i=0;i<filenames.size(); i++)
 	{
-		AddFile(filenames[i].c_str(), nullptr, filter, Printf, hashfile);
+		AddFile(filenames[i].c_str(), nullptr, filter, Printf);
 
 		if (i == (unsigned)MaxIwadIndex) MoveLumpsInFolder("after_iwad/");
 		std::string path = "filter/%s";
@@ -330,7 +327,7 @@ int FileSystem::AddFromBuffer(const char* name, char* data, int size, int id, in
 // [RH] Removed reload hack
 //==========================================================================
 
-void FileSystem::AddFile (const char *filename, FileReader *filer, LumpFilterInfo* filter, FileSystemMessageFunc Printf, FILE* hashfile)
+void FileSystem::AddFile (const char *filename, FileReader *filer, LumpFilterInfo* filter, FileSystemMessageFunc Printf)
 {
 	int startlump;
 	bool isdir = false;
@@ -398,50 +395,11 @@ void FileSystem::AddFile (const char *filename, FileReader *filer, LumpFilterInf
 				std::string path = filename;
 				path += ':';
 				path += resfile->getName(i);
-				auto embedded = resfile->GetEntryReader(i, READER_NEW, READERFLAG_SEEKABLE);
-				AddFile(path.c_str(), &embedded, filter, Printf, hashfile);
+				auto embedded = resfile->GetEntryReader(i, READER_CACHED);
+				AddFile(path.c_str(), &embedded, filter, Printf);
 			}
 		}
 
-		if (hashfile)
-		{
-			uint8_t cksum[16];
-			char cksumout[33];
-			memset(cksumout, 0, sizeof(cksumout));
-
-			if (filereader.isOpen())
-			{
-				filereader.Seek(0, FileReader::SeekSet);
-				md5Hash(filereader, cksum);
-
-				for (size_t j = 0; j < sizeof(cksum); ++j)
-				{
-					snprintf(cksumout + (j * 2), 3, "%02X", cksum[j]);
-				}
-
-				fprintf(hashfile, "file: %s, hash: %s, size: %d\n", filename, cksumout, (int)filereader.GetLength());
-			}
-
-			else
-				fprintf(hashfile, "file: %s, Directory structure\n", filename);
-
-			for (int i = 0; i < resfile->EntryCount(); i++)
-			{
-				int flags = resfile->GetEntryFlags(i);
-				if (!(flags & RESFF_EMBEDDED))
-				{
-					auto reader = resfile->GetEntryReader(i, READER_SHARED, 0);
-					md5Hash(filereader, cksum);
-
-					for (size_t j = 0; j < sizeof(cksum); ++j)
-					{
-						snprintf(cksumout + (j * 2), 3, "%02X", cksum[j]);
-					}
-
-					fprintf(hashfile, "file: %s, lump: %s, hash: %s, size: %llu\n", filename, resfile->getName(i), cksumout, (uint64_t)resfile->Length(i));
-				}
-			}
-		}
 		return;
 	}
 }
@@ -1276,7 +1234,7 @@ void FileSystem::ReadFile (int lump, void *dest)
 
 	if (numread != size)
 	{
-		throw FileSystemException("W_ReadFile: only read %ld of %ld on '%s'\n",
+		throw FileSystemException("W_ReadFile: only read %td of %td on '%s'\n",
 			numread, size, FileInfo[lump].LongName);
 	}
 }

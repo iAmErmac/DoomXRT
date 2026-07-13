@@ -53,6 +53,7 @@
 /gzdoomd
 /gzdoomrd
 /gzdoommsr
+gzdoom-crash.log
 
 /.venv/
 /.git/

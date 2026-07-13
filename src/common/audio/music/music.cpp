@@ -77,15 +77,14 @@ float	relative_volume = 1.f;
 float	saved_relative_volume = 1.0f;	// this could be used to implement an ACS FadeMusic function
 MusicVolumeMap MusicVolumes;
 MidiDeviceMap MidiDevices;
+TMap<int, int> ModPlayers;
 
-static FileReader DefaultOpenMusic(const char* fn)
+static int DefaultFindMusic(const char* fn)
 {
-	// This is the minimum needed to make the music system functional.
-	FileReader fr;
-	fr.OpenFile(fn);
-	return fr;
+	return -1;
 }
-static MusicCallbacks mus_cb = { nullptr, DefaultOpenMusic };
+
+MusicCallbacks mus_cb = { nullptr, DefaultFindMusic };
 
 
 // PUBLIC DATA DEFINITIONS -------------------------------------------------
@@ -98,18 +97,66 @@ EXTERN_CVAR(Float, fluid_gain)
 
 CVAR(Bool, mus_calcgain, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG) // changing this will only take effect for the next song.
 CVAR(Bool, mus_usereplaygain, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG) // changing this will only take effect for the next song.
-CUSTOM_CVAR(Float, mus_gainoffset, 0.f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG) // for customizing the base volume
-{
-	if (self > 10.f) self = 10.f;
-	mus_playing.replayGainFactor = dBToAmplitude(mus_playing.replayGain + mus_gainoffset);
-}
+CVAR(Int, mod_preferred_player, 0, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)// toggle between libXMP and Dumb. Unlike other sound CVARs this is not directly mapped to ZMusic's config.
 
 // CODE --------------------------------------------------------------------
+
+//==========================================================================
+//
+// OpenMusic
+//
+// opens a FileReader for the music - used as a callback to keep
+// implementation details out of the core player.
+//
+//==========================================================================
+
+static FileReader OpenMusic(const char* musicname)
+{
+	FileReader reader;
+	if (!FileExists(musicname))
+	{
+		int lumpnum;
+		lumpnum = mus_cb.FindMusic(musicname);
+		if (lumpnum == -1) lumpnum = fileSystem.CheckNumForName(musicname, FileSys::ns_music);
+		if (lumpnum == -1)
+		{
+			Printf("Music \"%s\" not found\n", musicname);
+		}
+		else if (fileSystem.FileLength(lumpnum) != 0)
+		{
+			reader = fileSystem.ReopenFileReader(lumpnum);
+		}
+	}
+	else
+	{
+		// Load an external file.
+		reader.OpenFile(musicname);
+	}
+	return reader;
+}
+
+bool MusicExists(const char* music_name)
+{
+	if (music_name == nullptr)
+		return false;
+
+	if (FileExists(music_name))
+		return true;
+	else
+	{
+		int lumpnum;
+		lumpnum = mus_cb.FindMusic(music_name);
+		if (lumpnum == -1) lumpnum = fileSystem.CheckNumForName(music_name, FileSys::ns_music);
+		if (lumpnum != -1 && fileSystem.FileLength(lumpnum) != 0)
+			return true;
+	}
+	return false;
+}
 
 void S_SetMusicCallbacks(MusicCallbacks* cb)
 {
 	mus_cb = *cb;
-	if (mus_cb.OpenMusic == nullptr) mus_cb.OpenMusic = DefaultOpenMusic;	// without this we are dead in the water.
+	if (mus_cb.FindMusic == nullptr) mus_cb.FindMusic = DefaultFindMusic;	// without this we are dead in the water.
 }
 
 int MusicEnabled() // int return is for scripting
@@ -171,12 +218,12 @@ static bool FillStream(SoundStream* stream, void* buff, int len, void* userdata)
 	if (mus_playing.isfloat)
 	{
 		written = ZMusic_FillStream(mus_playing.handle, buff, len);
-		if (mus_playing.replayGainFactor != 1.f)
+		if (mus_playing.musicVolume != 1.f)
 		{
 			float* fbuf = (float*)buff;
 			for (int i = 0; i < len / 4; i++)
 			{
-				fbuf[i] *= mus_playing.replayGainFactor;
+				fbuf[i] *= mus_playing.musicVolume;
 			}
 		}
 	}
@@ -188,7 +235,7 @@ static bool FillStream(SoundStream* stream, void* buff, int len, void* userdata)
 		float* fbuf = (float*)buff;
 		for (int i = 0; i < len / 4; i++)
 		{
-			fbuf[i] = convert[i] * mus_playing.replayGainFactor * (1.f/32768.f);
+			fbuf[i] = convert[i] * mus_playing.musicVolume * (1.f/32768.f);
 		}
 	}
 
@@ -454,14 +501,14 @@ static FString ReplayGainHash(ZMusicCustomReader* reader, int flength, int playe
 {
 	std::string playparam = _playparam;
 
-	uint8_t buffer[50000];	// for performance reasons only hash the start of the file. If we wanted to do this to large waveform songs it'd cause noticable lag.
+	TArray<uint8_t> buffer(50000, true);	// for performance reasons only hash the start of the file. If we wanted to do this to large waveform songs it'd cause noticable lag.
 	uint8_t digest[16];
 	char digestout[33];
-	auto length = reader->read(reader, buffer, 50000);
+	auto length = reader->read(reader, buffer.data(), 50000);
 	reader->seek(reader, 0, SEEK_SET);
 	MD5Context md5;
 	md5.Init();
-	md5.Update(buffer, (int)length);
+	md5.Update(buffer.data(), (int)length);
 	md5.Final(digest);
 
 	for (size_t j = 0; j < sizeof(digest); ++j)
@@ -470,7 +517,7 @@ static FString ReplayGainHash(ZMusicCustomReader* reader, int flength, int playe
 	}
 	digestout[32] = 0;
 
-	auto type = ZMusic_IdentifyMIDIType((uint32_t*)buffer, 32);
+	auto type = ZMusic_IdentifyMIDIType((uint32_t*)buffer.data(), 32);
 	if (type == MIDI_NOTMIDI) return FStringf("%d:%s", flength, digestout);
 
 	// get the default for MIDI synth
@@ -558,26 +605,24 @@ CCMD(setreplaygain)
 	if (argv.argc() < 2)
 	{
 		Printf("Usage: setreplaygain {dB}\n");
-		Printf("Current replay gain is %f dB\n", mus_playing.replayGain);
+		Printf("Current replay gain is %f dB\n", AmplitudeTodB(mus_playing.musicVolume));
 		return;
 	}
 	float dB = (float)strtod(argv[1], nullptr);
 	if (dB > 10) dB = 10; // don't blast the speakers. Values above 2 or 3 are very rare.
 	gainMap.Insert(mus_playing.hash, dB);
 	SaveGains();
-	mus_playing.replayGain = dB;
-	mus_playing.replayGainFactor = (float)dBToAmplitude(mus_playing.replayGain + mus_gainoffset);
+	mus_playing.musicVolume = (float)dBToAmplitude(dB);
 }
 
 static void CheckReplayGain(const char *musicname, EMidiDevice playertype, const char *playparam)
 {
-	mus_playing.replayGain = 0.f;
-	mus_playing.replayGainFactor = dBToAmplitude(mus_gainoffset);
+	mus_playing.musicVolume = 1;
 	fluid_gain->Callback();
 	mod_dumb_mastervolume->Callback();
 	if (!mus_usereplaygain) return;
 
-	FileReader reader = mus_cb.OpenMusic(musicname);
+	FileReader reader = OpenMusic(musicname);
 	if (!reader.isOpen()) return;
 	int flength = (int)reader.GetLength();
 	auto mreader = GetMusicReader(reader);	// this passes the file reader to the newly created wrapper.
@@ -589,8 +634,7 @@ static void CheckReplayGain(const char *musicname, EMidiDevice playertype, const
 	auto entry = gainMap.CheckKey(hash);
 	if (entry)
 	{
-		mus_playing.replayGain = *entry;
-		mus_playing.replayGainFactor = dBToAmplitude(mus_playing.replayGain + mus_gainoffset);
+		mus_playing.musicVolume = dBToAmplitude(*entry);
 		return;
 	}
 	if (!mus_calcgain) return;
@@ -674,19 +718,18 @@ static void CheckReplayGain(const char *musicname, EMidiDevice playertype, const
 	}
 	ZMusic_Close(handle);
 
-	GainAnalyzer analyzer;
-	int result = analyzer.InitGainAnalysis(fmt.mSampleRate);
+	auto analyzer = std::make_unique<GainAnalyzer>();
+	int result = analyzer->InitGainAnalysis(fmt.mSampleRate);
 	if (result == GAIN_ANALYSIS_OK)
 	{
-		result = analyzer.AnalyzeSamples(lbuffer.Data(), rbuffer.Size() == 0 ? nullptr : rbuffer.Data(), lbuffer.Size(), rbuffer.Size() == 0 ? 1 : 2);
+		result = analyzer->AnalyzeSamples(lbuffer.Data(), rbuffer.Size() == 0 ? nullptr : rbuffer.Data(), lbuffer.Size(), rbuffer.Size() == 0 ? 1 : 2);
 		if (result == GAIN_ANALYSIS_OK)
 		{
-			auto gain = analyzer.GetTitleGain();
-			Printf("Calculated replay gain for %s at %f dB\n", hash.GetChars(), gain);
+			auto gain = analyzer->GetTitleGain();
+			Printf("Calculated replay gain for %s (%s) at %f dB\n", musicname, hash.GetChars(), gain);
 
 			gainMap.Insert(hash, gain);
-			mus_playing.replayGain = gain;
-			mus_playing.replayGainFactor = dBToAmplitude(mus_playing.replayGain + mus_gainoffset);
+			mus_playing.musicVolume = dBToAmplitude(gain);
 			SaveGains();
 		}
 	}
@@ -742,7 +785,6 @@ bool S_ChangeMusic(const char* musicname, int order, bool looping, bool force)
 	}
 
 	ZMusic_MusicStream handle = nullptr;
-	MidiDeviceSetting* devp = MidiDevices.CheckKey(musicname);
 
 	// Strip off any leading file:// component.
 	if (strncmp(musicname, "file://", 7) == 0)
@@ -751,7 +793,7 @@ bool S_ChangeMusic(const char* musicname, int order, bool looping, bool force)
 	}
 
 	// opening the music must be done by the game because it's different depending on the game's file system use.
-	FileReader reader = mus_cb.OpenMusic(musicname);
+	FileReader reader = OpenMusic(musicname);
 	if (!reader.isOpen()) return false;
 	auto m = reader.Read();
 	reader.Seek(0, FileReader::SeekSet);
@@ -776,9 +818,27 @@ bool S_ChangeMusic(const char* musicname, int order, bool looping, bool force)
 	}
 	else
 	{
+		int lumpnum = mus_cb.FindMusic(musicname);
+		MidiDeviceSetting* devp = MidiDevices.CheckKey(lumpnum);
+		int* mplay = ModPlayers.CheckKey(lumpnum);
 
-		CheckReplayGain(musicname, devp ? (EMidiDevice)devp->device : MDEV_DEFAULT, devp ? devp->args.GetChars() : "");
+		auto volp = MusicVolumes.CheckKey(lumpnum);
+		if (volp)
+		{
+			mus_playing.musicVolume = *volp;
+
+		}
+		else
+		{
+			CheckReplayGain(musicname, devp ? (EMidiDevice)devp->device : MDEV_DEFAULT, devp ? devp->args.GetChars() : "");
+		}
 		auto mreader = GetMusicReader(reader);	// this passes the file reader to the newly created wrapper.
+		int mod_player = mplay? *mplay : *mod_preferred_player;
+		int scratch;
+
+		// This config var is only effective when opening a music stream so there's no need for active synchronization. Setting it here is sufficient.
+		// Ideally this should have been a parameter to ZMusic_OpenSong, but that would have necessitated an API break.
+		ChangeMusicSettingInt(zmusic_mod_preferredplayer, mus_playing.handle, mod_player, &scratch);
 		mus_playing.handle = ZMusic_OpenSong(mreader, devp ? (EMidiDevice)devp->device : MDEV_DEFAULT, devp ? devp->args.GetChars() : "");
 		if (mus_playing.handle == nullptr)
 		{
@@ -793,13 +853,12 @@ bool S_ChangeMusic(const char* musicname, int order, bool looping, bool force)
 
 	if (mus_playing.handle != 0)
 	{ // play it
-		auto volp = MusicVolumes.CheckKey(musicname);
-		float vol = volp ? *volp : 1.f;
-		if (!S_StartMusicPlaying(mus_playing.handle, looping, vol, order))
+		if (!S_StartMusicPlaying(mus_playing.handle, looping, 1.f, order))
 		{
 			Printf("Unable to start %s: %s\n", mus_playing.name.GetChars(), ZMusic_GetLastError());
 			return false;
 		}
+
 		S_CreateStream();
 		mus_playing.baseorder = order;
 		return true;

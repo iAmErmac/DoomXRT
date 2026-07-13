@@ -100,12 +100,11 @@ CCMD (addkeysection)
 		}
 
 		// Limit the ini name to 32 chars
-		if (strlen (argv[2]) > 32)
-			argv[2][32] = 0;
+		FString name(argv[2], 32);
 
 		for (unsigned i = 0; i < KeySections.Size(); i++)
 		{
-			if (KeySections[i].mTitle.CompareNoCase(argv[2]) == 0)
+			if (KeySections[i].mTitle.CompareNoCase(name) == 0)
 			{
 				CurrentKeySection = i;
 				return;
@@ -171,7 +170,7 @@ void D_LoadWadSettings ()
 
 		while (conf < eof)
 		{
-			size_t i;
+			size_t i = 0;
 
 			// Fetch a line to execute
 			command.Clear();
@@ -179,14 +178,14 @@ void D_LoadWadSettings ()
 			{
 				command.Push(conf[i]);
 			}
-			if (i == 0)
+			if (i == 0) // Blank line
 			{
 				conf++;
 				continue;
 			}
 			command.Push(0);
 			conf += i;
-			if (*conf == '\n')
+			if (conf >= eof || *conf == '\n')
 			{
 				conf++;
 			}

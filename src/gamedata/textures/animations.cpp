@@ -56,13 +56,18 @@ FTextureAnimator TexAnim;
 
 // PRIVATE DATA DEFINITIONS ------------------------------------------------
 
-static FRandom pr_animatepictures ("AnimatePics");
+static FCRandom pr_animatepictures ("AnimatePics");
 
 // CODE --------------------------------------------------------------------
 
 void FTextureAnimator::DeleteAll()
 {
+	for (unsigned int i = 0; i < mFireTextures.Size(); i++)
+	{
+		mFireTextures[i].texture->CleanHardwareData(true);
+	}
 	mAnimations.Clear();
+	mFireTextures.Clear();
 
 	for (unsigned i = 0; i < mSwitchDefs.Size(); i++)
 	{
@@ -88,18 +93,19 @@ void FTextureAnimator::DeleteAll()
 FAnimDef *FTextureAnimator::AddAnim (FAnimDef& anim)
 {
 	// Search for existing duplicate.
-	for (unsigned int i = 0; i < mAnimations.Size(); ++i)
-	{
-		if (mAnimations[i].BasePic == anim.BasePic)
-		{
-			// Found one!
-			mAnimations[i] = anim;
-			return &mAnimations[i];
-		}
+	uint16_t * index = mAnimationIndices.CheckKey(anim.BasePic);
+
+	if(index)
+	{	// Found one!
+		mAnimations[*index] = anim;
+		return &mAnimations[*index];
 	}
-	// Didn't find one, so add it at the end.
-	mAnimations.Push (anim);
-	return &mAnimations.Last();
+	else
+	{	// Didn't find one, so add it at the end.
+		mAnimationIndices.Insert(anim.BasePic, mAnimations.Size());
+		mAnimations.Push (anim);
+		return &mAnimations.Last();
+	}
 }
 
 //==========================================================================
@@ -346,6 +352,10 @@ void FTextureAnimator::InitAnimDefs ()
 				{
 					TexMan.GameTexture(picnum)->SetSkyOffset(sc.Number);
 				}
+			}
+			else if (sc.Compare("firetexture"))
+			{
+				ParseFireTexture (sc);
 			}
 			else
 			{
@@ -781,6 +791,86 @@ void FTextureAnimator::ParseCameraTexture(FScanner &sc)
 	viewer->SetDisplaySize((float)fitwidth, (float)fitheight);
 }
 
+void FTextureAnimator::ParseFireTexture(FScanner& sc)
+{
+	FString picname;
+	FFireTexture fireTexture;
+	TArray<PalEntry> palette;
+	uint32_t duration;
+
+	sc.MustGetString();
+	picname = sc.String;
+	sc.MustGetStringName("tics");
+	sc.MustGetValue(true);
+	duration = uint32_t(sc.Float * 1000 / TICRATE);
+
+	FGameTexture* gametex = MakeGameTexture(new FireTexture(), picname.GetChars(), ETextureType::Wall);
+	// No decals here.
+	gametex->SetNoDecals(true);
+	if (sc.GetString())
+	{
+		if (sc.Compare("allowdecals"))
+		{
+			gametex->SetNoDecals(false);
+		}
+		else
+		{
+			sc.UnGet();
+		}
+	}
+	while (sc.GetString())
+	{
+		if (sc.Compare("color"))
+		{
+			uint8_t r, g, b, a;
+			sc.MustGetValue(false);
+			r = sc.Number;
+			sc.MustGetValue(false);
+			g = sc.Number;
+			sc.MustGetValue(false);;
+			b = sc.Number;
+			sc.MustGetValue(false);
+			a = sc.Number;
+			palette.Push(PalEntry(a, r, g, b));
+			if (a != 255 && a != 0)
+			{
+				gametex->SetTranslucent(true);
+			}
+
+			if (palette.Size() > 256)
+			{
+				sc.ScriptError("Too many colors specified!");
+			}
+		}
+		else if (sc.Compare("palette"))
+		{
+			uint8_t index = 0;
+			sc.MustGetValue(false);
+			index = sc.Number;
+			PalEntry pal = GPalette.BaseColors[index];
+			pal.a = pal.isBlack() ? 0 : 255;
+			palette.Push(pal);
+
+			if (palette.Size() > 256)
+			{
+				sc.ScriptError("Too many colors specified!");
+			}
+		}
+		else
+		{
+			sc.UnGet();
+			break;
+		}
+	}
+
+	fireTexture.texture = gametex;
+	fireTexture.Duration = duration;
+	fireTexture.SwitchTime = 0;
+	static_cast<FireTexture*>(gametex->GetTexture())->SetPalette(palette);
+	mFireTextures.Push(fireTexture);
+	TexMan.AddGameTexture(gametex);
+}
+
 //==========================================================================
 //
 // FTextureAnimator :: FixAnimations
@@ -930,6 +1020,104 @@ void FAnimDef::SetSwitchTime (uint64_t mstime)
 	}
 }
 
+static void AdvanceFrame(uint16_t &frame, uint8_t &AnimType, const FAnimDef &anim)
+{
+	switch (AnimType)
+	{
+	default:
+	case FAnimDef::ANIM_Forward:
+		frame = (frame + 1) % anim.NumFrames;
+		break;
+
+	case FAnimDef::ANIM_Backward:
+		if (frame == 0)
+		{
+			frame = anim.NumFrames - 1;
+		}
+		else
+		{
+			frame--;
+		}
+		break;
+	case FAnimDef::ANIM_Random:
+		// select a random frame other than the current one
+		if (anim.NumFrames > 1)
+		{
+			uint16_t rndFrame = (uint16_t)pr_animatepictures(anim.NumFrames - 1);
+			if(rndFrame == frame) rndFrame++;
+			frame = rndFrame % anim.NumFrames;
+		}
+		break;
+
+	case FAnimDef::ANIM_OscillateUp:
+		frame = frame + 1;
+		assert(frame < anim.NumFrames);
+		if (frame == anim.NumFrames - 1)
+		{
+			AnimType = FAnimDef::ANIM_OscillateDown;
+		}
+		break;
+
+	case FAnimDef::ANIM_OscillateDown:
+		frame = frame - 1;
+		if (frame == 0)
+		{
+			AnimType = FAnimDef::ANIM_OscillateUp;
+		}
+		break;
+	}
+}
+
+constexpr double msPerTic = 1'000.0 / TICRATE;
+
+bool FTextureAnimator::InitStandaloneAnimation(FStandaloneAnimation &animInfo, FTextureID tex, uint32_t curTic)
+{
+	animInfo.ok = false;
+	uint16_t * index = mAnimationIndices.CheckKey(tex);
+	if(!index) return false;
+	FAnimDef * anim = &mAnimations[*index];
+
+	animInfo.ok = true;
+	animInfo.AnimIndex = *index;
+	animInfo.CurFrame = 0;
+	animInfo.SwitchTic = curTic;
+	animInfo.AnimType = (anim->AnimType == FAnimDef::ANIM_OscillateDown) ? FAnimDef::ANIM_OscillateUp : anim->AnimType;
+	uint32_t time = anim->Frames[0].SpeedMin;
+	if(anim->Frames[0].SpeedRange != 0)
+	{
+		time += pr_animatepictures(anim->Frames[0].SpeedRange);
+	}
+	animInfo.SwitchTic += time / msPerTic;
+	return true;
+}
+
+FTextureID FTextureAnimator::UpdateStandaloneAnimation(FStandaloneAnimation &animInfo, double curTic)
+{
+	if(!animInfo.ok) return nullptr;
+	auto &anim = mAnimations[animInfo.AnimIndex];
+	if(animInfo.SwitchTic <= curTic)
+	{
+		uint16_t frame = animInfo.CurFrame;
+		uint16_t speedframe = anim.bDiscrete ? frame : 0;
+		while(animInfo.SwitchTic <= curTic)
+		{
+			AdvanceFrame(frame, animInfo.AnimType, anim);
+
+			if(anim.bDiscrete) speedframe = frame;
+
+			uint32_t time = anim.Frames[speedframe].SpeedMin;
+			if(anim.Frames[speedframe].SpeedRange != 0)
+			{
+				time += pr_animatepictures(anim.Frames[speedframe].SpeedRange);
+			}
+
+			animInfo.SwitchTic += time / msPerTic;
+		}
+		animInfo.CurFrame = frame;
+	}
+	return anim.bDiscrete ? anim.Frames[animInfo.CurFrame].FramePic : (anim.BasePic + animInfo.CurFrame);
+}
+
 
 //==========================================================================
 //
@@ -941,6 +1129,32 @@ void FAnimDef::SetSwitchTime (uint64_t mstime)
 
 void FTextureAnimator::UpdateAnimations (uint64_t mstime)
 {
+	for (unsigned int i = 0; i < mFireTextures.Size(); i++)
+	{
+		FFireTexture* fire = &mFireTextures[i];
+		bool updated = false;
+
+		if (fire->SwitchTime == 0)
+		{
+			fire->SwitchTime = mstime + fire->Duration;
+		}
+		else while (fire->SwitchTime <= mstime)
+		{
+			static_cast<FireTexture*>(fire->texture->GetTexture())->Update();
+			fire->SwitchTime = mstime + fire->Duration;
+			updated = true;
+		}
+
+		if (updated)
+		{
+			fire->texture->CleanHardwareData();
+
+			if (fire->texture->GetSoftwareTexture())
+				delete fire->texture->GetSoftwareTexture();
+
+			fire->texture->SetSoftwareTexture(nullptr);
+		}
+	}
 	for (unsigned int j = 0; j < mAnimations.Size(); ++j)
 	{
 		FAnimDef *anim = &mAnimations[j];
@@ -955,50 +1169,7 @@ void FTextureAnimator::UpdateAnimations (uint64_t mstime)
 		{ // Multiple frames may have passed since the last time calling
 		  // R_UpdateAnimations, so be sure to loop through them all.
 
-			switch (anim->AnimType)
-			{
-			default:
-			case FAnimDef::ANIM_Forward:
-				anim->CurFrame = (anim->CurFrame + 1) % anim->NumFrames;
-				break;
-
-			case FAnimDef::ANIM_Backward:
-				if (anim->CurFrame == 0)
-				{
-					anim->CurFrame = anim->NumFrames - 1;
-				}
-				else
-				{
-					anim->CurFrame -= 1;
-				}
-				break;
-
-			case FAnimDef::ANIM_Random:
-				// select a random frame other than the current one
-				if (anim->NumFrames > 1)
-				{
-					uint16_t rndFrame = (uint16_t)pr_animatepictures(anim->NumFrames - 1);
-					if (rndFrame >= anim->CurFrame) rndFrame++;
-					anim->CurFrame = rndFrame;
-				}
-				break;
-
-			case FAnimDef::ANIM_OscillateUp:
-				anim->CurFrame = anim->CurFrame + 1;
-				if (anim->CurFrame >= anim->NumFrames - 1)
-				{
-					anim->AnimType = FAnimDef::ANIM_OscillateDown;
-				}
-				break;
-
-			case FAnimDef::ANIM_OscillateDown:
-				anim->CurFrame = anim->CurFrame - 1;
-				if (anim->CurFrame == 0)
-				{
-					anim->AnimType = FAnimDef::ANIM_OscillateUp;
-				}
-				break;
-			}
+			AdvanceFrame(anim->CurFrame, anim->AnimType, *anim);
 			anim->SetSwitchTime (mstime);
 		}
 

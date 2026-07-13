@@ -1,10 +1,13 @@
 #pragma once 
 
+#include <variant>
 #include "dobject.h"
 #include "serializer.h"
 #include "d_event.h"
+#include "p_local.h"
 #include "sbar.h"
 #include "info.h"
+#include "vm.h"
 
 class DStaticEventHandler;
 struct EventManager;
@@ -16,6 +19,229 @@ enum class EventHandlerType
 {
 	Global,
 	PerMap
+};
+
+enum ENetCmd
+{
+	NET_INT8 = 1,
+	NET_INT16,
+	NET_INT,
+	NET_FLOAT,
+	NET_DOUBLE,
+	NET_STRING,
+};
+
+struct FNetworkCommand
+{
+private:
+	size_t _index = 0;
+	TArray<uint8_t> _stream;
+
+public:
+	int Player;
+	FName Command;
+
+	FNetworkCommand(const int player, const FName& command, TArray<uint8_t>& stream) : Player(player), Command(command)
+	{
+		_stream.Swap(stream);
+	}
+
+	inline bool EndOfStream() const
+	{
+		return _index >= _stream.Size();
+	}
+
+	inline void Reset()
+	{
+		_index = 0;
+	}
+
+	int ReadInt8()
+	{
+		if (EndOfStream())
+			return 0;
+
+		return _stream[_index++];
+	}
+
+	// If a value has to cut off early, just treat the previous value as the full one.
+	int ReadInt16()
+	{
+		if (EndOfStream())
+			return 0;
+
+		int value = _stream[_index++];
+		if (!EndOfStream())
+			value = (value << 8) | _stream[_index++];
+
+		return value;
+	}
+
+	int ReadInt()
+	{
+		if (EndOfStream())
+			return 0;
+
+		int value = _stream[_index++];
+		if (!EndOfStream())
+		{
+			value = (value << 8) | _stream[_index++];
+			if (!EndOfStream())
+			{
+				value = (value << 8) | _stream[_index++];
+				if (!EndOfStream())
+					value = (value << 8) | _stream[_index++];
+			}
+		}
+
+		return value;
+	}
+
+	// Floats without their first bits are pretty meaningless so those are done first.
+	double ReadFloat()
+	{
+		if (EndOfStream())
+			return 0.0;
+
+		int value = _stream[_index++] << 24;
+		if (!EndOfStream())
+		{
+			value |= _stream[_index++] << 16;
+			if (!EndOfStream())
+			{
+				value |= _stream[_index++] << 8;
+				if (!EndOfStream())
+					value |= _stream[_index++];
+			}
+		}
+
+		union
+		{
+			int32_t i;
+			float f;
+		} floatCaster;
+		floatCaster.i = value;
+		return floatCaster.f;
+	}
+
+	double ReadDouble()
+	{
+		if (EndOfStream())
+			return 0.0;
+
+		int64_t value = int64_t(_stream[_index++]) << 56;
+		if (!EndOfStream())
+		{
+			value |= int64_t(_stream[_index++]) << 48;
+			if (!EndOfStream())
+			{
+				value |= int64_t(_stream[_index++]) << 40;
+				if (!EndOfStream())
+				{
+					value |= int64_t(_stream[_index++]) << 32;
+					if (!EndOfStream())
+					{
+						value |= int64_t(_stream[_index++]) << 24;
+						if (!EndOfStream())
+						{
+							value |= int64_t(_stream[_index++]) << 16;
+							if (!EndOfStream())
+							{
+								value |= int64_t(_stream[_index++]) << 8;
+								if (!EndOfStream())
+									value |= int64_t(_stream[_index++]);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		union
+		{
+			int64_t i;
+			double f;
+		} floatCaster;
+		floatCaster.i = value;
+		return floatCaster.f;
+	}
+
+	const char* ReadString()
+	{
+		if (EndOfStream())
+			return nullptr;
+
+		const char* str = reinterpret_cast<const char*>(&_stream[_index]);
+		_index += strlen(str) + 1;
+		return str;
+	}
+};
+
+class DNetworkBuffer final : public DObject
+{
+	DECLARE_CLASS(DNetworkBuffer, DObject)
+
+public:
+	struct BufferValue
+	{
+	private:
+		ENetCmd _type;
+		std::variant<int, double, FString> _message;
+
+	public:
+		BufferValue(const ENetCmd type, const int message) : _type(type), _message(message) {}
+		BufferValue(const ENetCmd type, const double message) : _type(type), _message(message) {}
+		BufferValue(const ENetCmd type, const FString& message) : _type(type), _message(message) {}
+
+		inline ENetCmd GetType() const
+		{
+			return _type;
+		}
+
+		inline int GetInt() const
+		{
+			return std::get<int>(_message);
+		}
+
+		inline double GetDouble() const
+		{
+			return std::get<double>(_message);
+		}
+
+		inline const char* GetString() const
+		{
+			return std::get<FString>(_message).GetChars();
+		}
+	};
+
+private:
+	unsigned int _size = 0u;
+	TArray<BufferValue> _buffer = {};
+
+public:
+	inline unsigned int GetBytes() const
+	{
+		return _size;
+	}
+
+	inline unsigned int GetBufferSize() const
+	{
+		return _buffer.Size();
+	}
+
+	inline const BufferValue& GetValue(unsigned int i) const
+	{
+		return _buffer[i];
+	}
+
+	void AddInt8(int byte);
+	void AddInt16(int word);
+	void AddInt(int msg);
+	void AddFloat(double msg);
+	void AddDouble(double msg);
+	void AddString(const FString& msg);
+	void OnDestroy() override;
+	void Serialize(FSerializer& arc) override;
 };
 
 // ==============================================
@@ -86,6 +312,10 @@ public:
 	void WorldThingRevived(AActor* actor);
 	void WorldThingDamaged(AActor* actor, AActor* inflictor, AActor* source, int damage, FName mod, int flags, DAngle angle);
 	void WorldThingDestroyed(AActor* actor);
+	bool WorldHitscanPreFired(AActor* actor, DAngle angle, double distance, DAngle pitch, int damage, FName damageType, PClassActor *pufftype, int flags, double sz, double offsetforward, double offsetside);
+	bool WorldRailgunPreFired(FName damageType, PClassActor* pufftype, FRailParams* param);
+	void WorldHitscanFired(AActor* actor, const DVector3& AttackPos, const DVector3& DamagePosition, AActor* Inflictor, int flags);
+	void WorldRailgunFired(AActor* actor, const DVector3& AttackPos, const DVector3& DamagePosition, AActor* Inflictor, int flags);
 	void WorldLinePreActivated(line_t* line, AActor* actor, int activationType, bool* shouldactivate);
 	void WorldLineActivated(line_t* line, AActor* actor, int activationType);
 	int WorldSectorDamaged(sector_t* sector, AActor* source, int damage, FName damagetype, int part, DVector3 position, bool isradius);
@@ -113,6 +343,7 @@ public:
 	
 	// 
 	void ConsoleProcess(int player, FString name, int arg1, int arg2, int arg3, bool manual, bool ui);
+	void NetCommandProcess(FNetworkCommand& cmd);
 
 	//
 	void CheckReplacement(PClassActor* replacee, PClassActor** replacement, bool* final);
@@ -167,6 +398,16 @@ struct FWorldEvent
 	bool DamageIsRadius; // radius damage yes/no
 	int NewDamage = 0; // sector/line damaged. allows modifying damage
 	FState* CrushedState = nullptr; // custom crush state set in thingground
+	DVector3 AttackPos; //hitscan point of origin
+	DAngle AttackAngle;
+	DAngle AttackPitch;
+	double AttackDistance = 0;
+	double AttackOffsetForward = 0;
+	double AttackOffsetSide = 0;
+	double AttackZ = 0;
+	PClassActor* AttackPuffType = nullptr;
+	FRailParams RailParams;
+	int AttackLineFlags = 0;
 };
 
 struct FPlayerEvent
@@ -241,6 +482,14 @@ struct EventManager
 	void WorldThingSpawned(AActor* actor);
 	// called after AActor::Die of each actor.
 	void WorldThingDied(AActor* actor, AActor* inflictor);
+	// called when a hitscan attack is fired (can be overridden to block it)
+	bool WorldHitscanPreFired(AActor* actor, DAngle angle, double distance, DAngle pitch, int damage, FName damageType, PClassActor *pufftype, int flags, double sz, double offsetforward, double offsetside);
+	// called when a hitscan attack has been fired
+	void WorldHitscanFired(AActor* actor, const DVector3& AttackPos, const DVector3& DamagePosition, AActor* Inflictor, int flags);
+	// called when a railgun attack has been fired
+	void WorldRailgunFired(AActor* actor, const DVector3& AttackPos, const DVector3& DamagePosition, AActor* Inflictor, int flags);
+	// called when a railgun attack has been fired (can be overridden to block it)
+	bool WorldRailgunPreFired(FName damageType, PClassActor* pufftype, FRailParams* param);
 	// called inside AActor::Grind just before the corpse is destroyed
 	void WorldThingGround(AActor* actor, FState* st);
 	// called after AActor::Revive.
@@ -285,6 +534,8 @@ struct EventManager
 	bool Responder(const event_t* ev); // splits events into InputProcess and UiProcess
 	// this executes on console/net events.
 	void Console(int player, FString name, int arg1, int arg2, int arg3, bool manual, bool ui);
+	// This reads from ZScript network commands.
+	void NetCommand(FNetworkCommand& cmd);
 
 	// called when looking up the replacement for an actor class
 	bool CheckReplacement(PClassActor* replacee, PClassActor** replacement);
@@ -296,6 +547,10 @@ struct EventManager
 
 	// send networked event. unified function.
 	bool SendNetworkEvent(FString name, int arg1, int arg2, int arg3, bool manual);
+	// Send a custom network command from ZScript.
+	bool SendNetworkCommand(const FName& cmd, VMVa_List& args);
+	// Send a pre-built command buffer over.
+	bool SendNetworkBuffer(const FName& cmd, const DNetworkBuffer* buffer);
 
 	// check if there is anything that should receive GUI events
 	bool CheckUiProcessors();
