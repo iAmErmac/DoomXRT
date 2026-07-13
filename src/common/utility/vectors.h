@@ -46,6 +46,8 @@
 #include <string.h>
 #include <algorithm>
 
+#include "common/utility/basics.h"
+
 // this is needed to properly normalize angles. We cannot do that with compiler provided conversions because they differ too much
 #include "xs_Float.h"
 
@@ -539,15 +541,9 @@ struct TVector3
 		return *this;
 	}
 
-	// returns the XY fields as a 2D-vector.
-	constexpr const Vector2& XY() const
+	constexpr Vector2 XY() const
 	{
-		return *reinterpret_cast<const Vector2*>(this);
-	}
-
-	constexpr Vector2& XY()
-	{
-		return *reinterpret_cast<Vector2*>(this);
+		return Vector2(X, Y);
 	}
 
 	// Add a 3D vector and a 2D vector.
@@ -785,27 +781,15 @@ struct TVector4
 	}
 
 	// returns the XY fields as a 2D-vector.
-	constexpr const Vector2& XY() const
+	constexpr Vector2 XY() const
 	{
-		return *reinterpret_cast<const Vector2*>(this);
+		return Vector2(X, Y);
 	}
 
-	constexpr Vector2& XY()
+	constexpr Vector3 XYZ() const
 	{
-		return *reinterpret_cast<Vector2*>(this);
+		return Vector3(X, Y, Z);
 	}
-
-	// returns the XY fields as a 2D-vector.
-	constexpr const Vector3& XYZ() const
-	{
-		return *reinterpret_cast<const Vector3*>(this);
-	}
-
-	constexpr Vector3& XYZ()
-	{
-		return *reinterpret_cast<Vector3*>(this);
-	}
-
 
 	// Test for approximate equality
 	bool ApproximatelyEquals(const TVector4 &other) const
@@ -1583,7 +1567,7 @@ constexpr inline TVector2<T> clamp(const TVector2<T> &vec, const TVector2<T> &mi
 template<class T>
 constexpr inline TVector3<T> clamp(const TVector3<T> &vec, const TVector3<T> &min, const TVector3<T> &max)
 {
-	return TVector3<T>(std::clamp<T>(vec.X, min.X, max.X), std::clamp<T>(vec.Y, min.Y, max.Y), std::clamp<T>(vec.Z, min.Z, max.Z));
+	return TVector3<T>(clamp<T>(vec.X, min.X, max.X), clamp<T>(vec.Y, min.Y, max.Y), clamp<T>(vec.Z, min.Z, max.Z));
 }
 
 template<class T>
@@ -1789,7 +1773,9 @@ struct TRotator
 template<class T>
 inline TVector3<T>::TVector3 (const TRotator<T> &rot)
 {
-	XY() = rot.Pitch.Cos() * rot.Yaw.ToVector();
+	auto XY = rot.Pitch.Cos() * rot.Yaw.ToVector();
+	X = XY.X;
+	Y = XY.Y;
 	Z = rot.Pitch.Sin();
 }
 

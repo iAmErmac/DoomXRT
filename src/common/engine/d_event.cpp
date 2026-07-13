@@ -51,6 +51,7 @@
 int eventhead;
 int eventtail;
 event_t events[MAXEVENTS];
+mousestate_t LastMousePos = {};
 
 #if !HAVE_RT
 CVAR(Float, m_sensitivity_x, 2.f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)

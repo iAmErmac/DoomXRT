@@ -836,6 +836,12 @@ OptionValue RocketTrailTypes
 	3.0, "$OPTVAL_SPRITESPARTICLES"
 }
 
+OptionValue RocketExplosionStyles
+{
+	0, "$OPTVAL_ROCKETEXP_STYLE_TRANS"
+	1, "$OPTVAL_ROCKETEXP_STYLE_ADD"
+}
+
 OptionValue BloodTypes
 {
 	0.0, "$OPTVAL_SPRITES"
@@ -944,6 +950,7 @@ OptionMenu "VideoOptions" protected
 	Option "$DSPLYMNU_OLDTRANS",				"r_vanillatrans", "VanillaTrans"
 	Option "$DSPLYMNU_FAKECONTRAST",			"r_fakecontrast", "Contrast"
 	Option "$DSPLYMNU_ROCKETTRAILS",			"cl_rockettrails", "RocketTrailTypes"
+	Option "$DSPLYMNU_ROCKETEXPSTYLE",			"addrocketexplosion", "RocketExplosionStyles"
 	Option "$DSPLYMNU_BLOODTYPE",				"cl_bloodtype", "BloodTypes"
 	Option "$DSPLYMNU_PUFFTYPE",				"cl_pufftype", "PuffTypes"
 	Slider "$DSPLYMNU_MAXPARTICLES",			"r_maxparticles", 100, 10000, 100, 0
@@ -1066,6 +1073,7 @@ OptionMenu "FlashOptions" protected
 	StaticText " "
 	Slider "$DSPLYMNU_BLOODFADE",				"blood_fade_scalar", 0.0, 1.0, 0.05, 2
 	Slider "$DSPLYMNU_PICKUPFADE",				"pickup_fade_scalar", 0.0, 1.0, 0.05, 2
+	Slider "$DSPLYMNU_POWERUPFADE",				"powerup_fade_scalar", 0.0, 1.0, 0.05, 2
 	Slider "$DSPLYMNU_WATERFADE",				"underwater_fade_scalar", 0.0, 1.0, 0.05, 2
 }
 
@@ -1203,6 +1211,12 @@ OptionValue AlwaysTally
 	2,	"$OPTVAL_WITHHUBS"
 }
 
+OptionValue SaveOrder
+{
+	0,	"$OPTVAL_ALPHABETICAL"
+	1,	"$OPTVAL_LASTSAVEDTIME"
+}
+
 OptionMenu "MiscOptions" protected
 {
 	Title "$MISCMNU_TITLE"
@@ -1227,6 +1241,7 @@ OptionMenu "MiscOptions" protected
 	Slider "$MISCMNU_AUTOSAVECOUNT",			"autosavecount", 1, 20, 1, 0
 	Option "$MISCMNU_QUICKSAVEROTATION",		"quicksaverotation", "OnOff"
 	Slider "$MISCMNU_QUICKSAVECOUNT",			"quicksaverotationcount", 1, 20, 1, 0
+	Option "$MISCMNU_SAVEORDER",				"save_sort_order", "SaveOrder"
 	Option "$MISCMNU_DEHLOAD",					"dehload", "dehopt"
 	Option "$MISCMNU_ENABLESCRIPTSCREENSHOTS",	"enablescriptscreenshot", "OnOff"
 	Option "$MISCMNU_SETSLOTSTRICT",			"setslotstrict", "YesNo"
@@ -1263,6 +1278,7 @@ OptionMenu "MiscOptions" protected
 
 OptionValue MapColorTypes
 {
+	-1, "$OPTVAL_DEFAULT"
 	0, "$OPTVAL_CUSTOM"
 	1, "$OPTVAL_TRADITIONALDOOM"
 	2, "$OPTVAL_TRADITIONALSTRIFE"
@@ -1938,6 +1954,7 @@ OptionMenu SoundOptions protected
 	StaticText " "
 	Slider "$SNDMNU_SFXVOLUME",			"snd_sfxvolume", 0, 1, 0.05, 2
 	Slider "$SNDMNU_MUSICVOLUME",		"snd_musicvolume", 0, 1, 0.05, 2
+	Slider "$SNDMNU_FOOTSTEPVOLUME",	"snd_footstepvolume", 0, 1, 0.05, 2
 	StaticText " "
 	Slider "$SNDMNU_MENUVOLUME",		"snd_menuvolume", 0, 1, 0.05, 2
 	StaticText " "
@@ -2265,6 +2282,7 @@ OptionValue ScaleModes
 	4, "1280x800"
 	5, "$OPTVAL_CUSTOM"
 	1, "$OPTVAL_LOWEST"
+	7, "$OPTVAL_LOWEST12"
 }
 OptionValue CropAspect
 {

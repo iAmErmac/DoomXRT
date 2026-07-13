@@ -63,8 +63,8 @@ struct FLineTraceData
 
 struct LinkContext
 {
-	voidptr sector_list;	// really msecnode but that's not exported yet.
-	voidptr render_list;
+	readonly voidptr sector_list;	// really msecnode but that's not exported yet.
+	readonly voidptr render_list;
 }
 
 class ViewPosition native
@@ -244,7 +244,7 @@ class Actor : Thinker native
 	native readonly State SeeState;
 	native State MeleeState;
 	native State MissileState;
-	native voidptr /*DecalBase*/ DecalGenerator;
+	native DecalBase DecalGenerator;
 	native uint8 fountaincolor;
 	native double CameraHeight;	// Height of camera when used as such
 	native double CameraFOV;
@@ -581,7 +581,7 @@ class Actor : Thinker native
 	}
 
 	// This is called when a missile bounces off something.
-	virtual int SpecialBounceHit(Actor bounceMobj, Line bounceLine, readonly<SecPlane> bouncePlane)
+	virtual int SpecialBounceHit(Actor bounceMobj, Line bounceLine, readonly<SecPlane> bouncePlane, bool is3DFloor = false)
 	{
 		return MHIT_DEFAULT;
 	}
@@ -690,6 +690,7 @@ class Actor : Thinker native
 	native clearscope static int ApplyDamageFactors(class<Inventory> itemcls, Name damagetype, int damage, int defdamage);
 	native void RemoveFromHash();
 	native void ChangeTid(int newtid);
+	native bool ActivateSpecial(Actor activator, bool death = false);
 	deprecated("3.8", "Use Level.FindUniqueTid() instead") static int FindUniqueTid(int start = 0, int limit = 0)
 	{
 		return level.FindUniqueTid(start, limit);
@@ -698,7 +699,10 @@ class Actor : Thinker native
 	native clearscope int GetRenderStyle() const;
 	native clearscope bool CheckKeys(int locknum, bool remote, bool quiet = false);
 	protected native void CheckPortalTransition(bool linked = true);
-		
+	native clearscope bool HasConversation() const;
+	native clearscope bool CanTalk() const;
+	native bool StartConversation(Actor player, bool faceTalker = true, bool saveAngle = true);
+
 	native clearscope string GetTag(string defstr = "") const;
 	native clearscope string GetCharacterName() const;
 	native void SetTag(string defstr = "");
@@ -771,7 +775,7 @@ class Actor : Thinker native
 	
 	native Actor OldSpawnMissile(Actor dest, class<Actor> type, Actor owner = null);
 	native Actor SpawnPuff(class<Actor> pufftype, vector3 pos, double hitdir, double particledir, int updown, int flags = 0, Actor victim = null);
-	native void SpawnBlood (Vector3 pos1, double dir, int damage);
+	native Actor SpawnBlood (Vector3 pos1, double dir, int damage);
 	native void BloodSplatter (Vector3 pos, double hitangle, bool axe = false);
 	native bool HitWater (sector sec, Vector3 pos, bool checkabove = false, bool alert = true, bool force = false, int flags = 0);
 	native void PlaySpawnSound(Actor missile);
@@ -867,7 +871,7 @@ class Actor : Thinker native
 	native bool BounceActor(Actor blocking, bool onTop);
 	native bool BounceWall(Line l = null);
 	native bool BouncePlane(readonly<SecPlane> plane, bool is3DFloor = false);
-	native void PlayBounceSound(bool onFloor);
+	native void PlayBounceSound(bool onFloor, double volume = 1.0);
 	native bool ReflectOffActor(Actor blocking);
 
 	clearscope double PitchTo(Actor target, double zOfs = 0, double targZOfs = 0, bool absolute = false) const
@@ -1296,12 +1300,12 @@ class Actor : Thinker native
 	native bool A_SetVisibleRotation(double anglestart = 0, double angleend = 0, double pitchstart = 0, double pitchend = 0, int flags = 0, int ptr = AAPTR_DEFAULT);
 	native void A_SetTranslation(name transname);
 	native bool A_SetSize(double newradius = -1, double newheight = -1, bool testpos = false);
-	native void A_SprayDecal(String name, double dist = 172, vector3 offset = (0, 0, 0), vector3 direction = (0, 0, 0), bool useBloodColor = false, color decalColor = 0);
+	native void A_SprayDecal(String name, double dist = 172, vector3 offset = (0, 0, 0), vector3 direction = (0, 0, 0), bool useBloodColor = false, color decalColor = 0, TranslationID translation = 0);
 	native void A_SetMugshotState(String name);
-	native void CopyBloodColor(Actor other);
-// HAVE_RT begin
-	native clearscope void A_RtShowTitle( int titleid, double duration_seconds, double fadeout_seconds = 3.0);
-// HAVE_RT end
+// HAVE_RT
+	native void A_RtShowTitle(int titleid, double duration_seconds, double fadeout_seconds = 0);
+// HAVE_RT
+	native void CopyBloodColor(readonly<Actor> other);
 
 	native void A_RearrangePointers(int newtarget, int newmaster = AAPTR_DEFAULT, int newtracer = AAPTR_DEFAULT, int flags=0);
 	native void A_TransferPointer(int ptr_source, int ptr_recipient, int sourcefield, int recipientfield=AAPTR_DEFAULT, int flags=0);

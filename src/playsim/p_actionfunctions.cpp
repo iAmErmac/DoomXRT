@@ -3494,7 +3494,7 @@ DEFINE_ACTION_FUNCTION(AActor, A_WolfAttack)
 
 	// Target can dodge if it can see enemy
 	DAngle angle = absangle(self->target->Angles.Yaw, self->target->AngleTo(self));
-	bool dodge = (P_CheckSight(self->target, self) && angle < DAngle::fromDeg(30. * 256. / 360.));	// 30 byteangles ~ 21°
+	bool dodge = (P_CheckSight(self->target, self) && angle < DAngle::fromDeg(30. * 256. / 360.));	// 30 byteangles ~ 21Ã‚Â°
 
 	// Distance check is simplistic
 	DVector2 vec = self->Vec2To(self->target);
@@ -5196,20 +5196,21 @@ void SetAnimationInternal(AActor * self, FName animName, double framerate, int s
 				{
 					animationid = self->modelData->animationIDs[0];
 				}
-				else if(smf->modelsAmount > 0)
+				else if (smf->modelsAmount > 0)
 				{
 					animationid = smf->animationIDs[0];
 				}
 
-				FModel* animation = mdl;
+				FModel* animationModel = mdl;
 
 				if (animationid >= 0)
 				{
-					animation = Models[animationid];
-					animationData = animation->AttachAnimationData();
+					animationModel = Models[animationid];
 				}
 
-				self->modelData->prevAnim = animation->PrecalculateFrame(self->modelData->prevAnim, to, inter, animationData, self->boneComponentData, 0);
+				animationData = animationModel->AttachAnimationData();
+
+				self->modelData->prevAnim = animationModel->PrecalculateFrame(self->modelData->prevAnim, to, inter, animationData);
 			}
 			else
 			{

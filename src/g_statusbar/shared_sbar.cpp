@@ -85,12 +85,11 @@ EXTERN_CVAR (Bool, am_showsecrets)
 EXTERN_CVAR (Bool, am_showitems)
 EXTERN_CVAR (Bool, am_showtime)
 EXTERN_CVAR (Bool, am_showtotaltime)
+CVAR(Bool, am_showlevelname, true, CVAR_ARCHIVE)
 EXTERN_CVAR(Bool, inter_subtitles)
 EXTERN_CVAR(Bool, ui_screenborder_classic_scaling)
 
-#if !HAVE_RT
-CVAR(Int, hud_scale, 0, CVAR_ARCHIVE);
-#endif
+CVAR(Int, hud_scale, -1, CVAR_ARCHIVE);
 CVAR(Bool, log_vgafont, false, CVAR_ARCHIVE)
 CVAR(Bool, hud_oldscale, true, CVAR_ARCHIVE)
 
@@ -106,8 +105,7 @@ CVAR (Flag, pf_hazard,		paletteflash, PF_HAZARD)
 
 
 // Stretch status bar to full screen width?
-#if !HAVE_RT
-CUSTOM_CVAR (Int, st_scale, 0, CVAR_ARCHIVE)
+CUSTOM_CVAR (Int, st_scale, -1, CVAR_ARCHIVE)
 {
 	if (self < -1)
 	{
@@ -120,42 +118,12 @@ CUSTOM_CVAR (Int, st_scale, 0, CVAR_ARCHIVE)
 		setsizeneeded = true;
 	}
 }
-#endif
-
-#if HAVE_RT
-CUSTOM_CVAR(Float, rt_hudscale, 1.f, CVAR_ARCHIVE)
-{
-	if (self < 0.1f)
-	{
-		self = 0.1f;
-		return;
-	}
-	if (self > 3.f)
-	{
-		self = 3.f;
-		return;
-	}
-
-	if (StatusBar)
-	{
-		StatusBar->SetScale();
-		setsizeneeded = true;
-	}
-}
-constexpr auto RT_HUDSCALE_NORM_HUD = 0.5;
-constexpr auto RT_HUDSCALE_NORM_STATUSBAR = 0.4;
-#endif
 
 EXTERN_CVAR(Float, hud_scalefactor)
 EXTERN_CVAR(Bool, hud_aspectscale)
 
-#if !HAVE_RT
 CVAR (Bool, crosshairon, true, CVAR_ARCHIVE);
 CVAR (Int, crosshair, 0, CVAR_ARCHIVE)
-#else
-CVAR(Bool, crosshairon, false, CVAR_ARCHIVE);
-CVAR(Int, crosshair, 7, CVAR_ARCHIVE) // dot crosshair
-#endif
 CVAR (Bool, crosshairforce, false, CVAR_ARCHIVE)
 CUSTOM_CVAR(Int, am_showmaplabel, 2, CVAR_ARCHIVE)
 {
@@ -309,19 +277,6 @@ static void CreateBaseStatusBar()
 
 static void CreateGameInfoStatusBar(bool &shouldWarn)
 {
-#if HAVE_RT
-	if (gameinfo.statusbarclass == "DoomStatusBar" || gameinfo.statusbarclass == "DoomStatusBar_RT")
-	{
-		gameinfo.statusbarclass = "DoomStatusBar_RT";
-	}
-	else
-	{
-		extern void RT_ShowWarningMessageBox(const char*);
-		RT_ShowWarningMessageBox((
-			FString{ "Found non-Doom HUD, expect INCOMPATIBILITIES.\ngameinfo.statusbarclass=" } +
-			FString{ gameinfo.statusbarclass.GetChars() }).GetChars());
-	}
-#endif
 	auto cls = PClass::FindClass(gameinfo.statusbarclass);
 	if (cls == nullptr)
 	{
@@ -434,7 +389,7 @@ DBaseStatusBar::DBaseStatusBar ()
 	CompleteBorder = false;
 	Centering = false;
 	FixedOrigin = false;
-	CrosshairSize = 1.;
+	CrosshairSize = PrevCrosshairSize = 1.;
 	memset(Messages, 0, sizeof(Messages));
 	Displacement = 0;
 	CPlayer = NULL;
@@ -475,19 +430,6 @@ void DBaseStatusBar::OnDestroy ()
 //
 //---------------------------------------------------------------------------
 
-#if HAVE_RT
-namespace
-{
-	double RT_GetGzScale(int gzdoomVerticalNormalization, bool isstatusbar)
-	{
-		auto fullscreenPixelSize = double(screen->GetHeight());
-		auto scale = double(rt_hudscale) * (isstatusbar ? RT_HUDSCALE_NORM_STATUSBAR : RT_HUDSCALE_NORM_HUD);
-
-		return fullscreenPixelSize * scale / double(gzdoomVerticalNormalization);
-	}
-}
-#endif
-
 void DBaseStatusBar::SetScale ()
 {
 	if (!hud_oldscale)
@@ -500,11 +442,7 @@ void DBaseStatusBar::SetScale ()
 
 	int w = twod->GetWidth();
 	int h = twod->GetHeight();
-#if !HAVE_RT
 	if (st_scale < 0 || ForcedScale)
-#else
-	if (ForcedScale)
-#endif
 	{
 		// This is the classic fullscreen scale with aspect ratio compensation.
 		int sby = VerticalResolution - RelTop;
@@ -533,11 +471,7 @@ void DBaseStatusBar::SetScale ()
 		// Since status bars and HUDs can be designed for non 320x200 screens this needs to be factored in here.
 		// The global scaling factors are for resources at 320x200, so if the actual ones are higher resolution
 		// the resulting scaling factor needs to be reduced accordingly.
-#if !HAVE_RT
 		int realscale = clamp((320 * GetUIScale(twod, st_scale)) / HorizontalResolution, 1, w / HorizontalResolution);
-#else
-		double realscale = RT_GetGzScale(VerticalResolution, true);
-#endif
 
 		double realscaley = realscale * (hud_aspectscale ? 1.2 : 1.);
 
@@ -570,18 +504,12 @@ DVector2 DBaseStatusBar::GetHUDScale() const
 		return Super::GetHUDScale();
 	}
 
-#if !HAVE_RT
 	int scale;
 	if (hud_scale < 0 || ForcedScale)	// a negative value is the equivalent to the old boolean hud_scale. This can yield different values for x and y for higher resolutions.
-#else
-	if (ForcedScale)
-#endif
 	{
 		return defaultScale;
 	}
-#if !HAVE_RT
 	scale = GetUIScale(twod, hud_scale);
-#endif
 
 	int hres = HorizontalResolution;
 	int vres = VerticalResolution;
@@ -590,11 +518,7 @@ DVector2 DBaseStatusBar::GetHUDScale() const
 	// Since status bars and HUDs can be designed for non 320x200 screens this needs to be factored in here.
 	// The global scaling factors are for resources at 320x200, so if the actual ones are higher resolution
 	// the resulting scaling factor needs to be reduced accordingly.
-#if !HAVE_RT
 	int realscale = max<int>(1, (320 * scale) / hres);
-#else
-	double realscale = RT_GetGzScale(vres, false);
-#endif
 	return{ double(realscale), double(realscale * (hud_aspectscale ? 1.2 : 1.)) };
 }
 
@@ -675,6 +599,8 @@ void DBaseStatusBar::DoDrawAutomapHUD(int crdefault, int highlight)
 	}
 
 	FormatMapName(primaryLevel, crdefault, &textbuffer);
+	if (textbuffer.IsEmpty())
+		return;
 
 	if (!generic_ui)
 	{
@@ -756,6 +682,8 @@ int DBaseStatusBar::GetPlayer ()
 
 void DBaseStatusBar::Tick ()
 {
+	PrevCrosshairSize = CrosshairSize;
+
 	for (size_t i = 0; i < countof(Messages); ++i)
 	{
 		DHUDMessageBase *msg = Messages[i];
@@ -998,15 +926,6 @@ void DBaseStatusBar::RefreshViewBorder ()
 
 void DBaseStatusBar::RefreshBackground () const
 {
-#if HAVE_RT
-	// do not draw background when view is active
-	// (i.e. not in the non-overlay automap)
-	if (viewactive)
-	{
-		return;
-	}
-#endif
-
 	int x, x2, y;
 
 	float ratio = ActiveRatio (twod->GetWidth(), twod->GetHeight());
@@ -1074,7 +993,7 @@ void DBaseStatusBar::RefreshBackground () const
 //
 //---------------------------------------------------------------------------
 
-void DBaseStatusBar::DrawCrosshair ()
+void DBaseStatusBar::DrawCrosshair (double ticFrac)
 {
 	if (!crosshairon)
 	{
@@ -1096,7 +1015,8 @@ void DBaseStatusBar::DrawCrosshair ()
 	}
 	int health = Scale(CPlayer->health, 100, CPlayer->mo->GetDefault()->health);
 
-	ST_DrawCrosshair(health, viewwidth / 2 + viewwindowx, viewheight / 2 + viewwindowy, CrosshairSize);
+	const double size = PrevCrosshairSize * (1.0 - ticFrac) + CrosshairSize * ticFrac;
+	ST_DrawCrosshair(health, viewwidth / 2 + viewwindowx, viewheight / 2 + viewwindowy, size);
 }
 
 //---------------------------------------------------------------------------
@@ -1168,14 +1088,10 @@ void DBaseStatusBar::Draw (EHudState state, double ticFrac)
 	{
 		if (CPlayer && CPlayer->camera && CPlayer->camera->player)
 		{
-			DrawCrosshair ();
+			DrawCrosshair (ticFrac);
 		}
 	}
-#if !HAVE_RT // draw all automap elements when in the overlay mode too
 	else if (automapactive)
-#else
-	if (automapactive)
-#endif
 	{
 		IFVIRTUAL(DBaseStatusBar, DrawAutomapHUD)
 		{

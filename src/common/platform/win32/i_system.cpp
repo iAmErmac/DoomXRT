@@ -514,7 +514,8 @@ void CalculateCPUSpeed()
 
         min_diff = freq.LowPart * 11 / 200;
 
-
+		// just in case we were launched with a custom priority class, keep it
+		DWORD OldPriorityClass = GetPriorityClass(GetCurrentProcess());
 
 		// Minimize the chance of task switching during the testing by going very
 
@@ -544,7 +545,7 @@ void CalculateCPUSpeed()
 
 
 
-		SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
+		SetPriorityClass(GetCurrentProcess(), OldPriorityClass);
 
 		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
 

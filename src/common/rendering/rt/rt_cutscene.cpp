@@ -9,6 +9,10 @@
 #include "v_draw.h"
 #include "v_font.h"
 
+#include <algorithm>
+#include <cmath>
+#include <optional>
+
 EXTERN_CVAR( Float, snd_mastervolume )
 
 extern void RT_FirstStartDone();

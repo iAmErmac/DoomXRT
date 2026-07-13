@@ -52,7 +52,7 @@
 #include "m_argv.h"
 #include "i_interface.h"
 
-CVAR(Bool, inter_subtitles, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
+CVAR(Bool, inter_subtitles, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
 
 CutsceneState cutscene;
 static int ticks;
@@ -272,8 +272,10 @@ void ScreenJobDraw()
 		ScaleOverrider ovr(twod);
 		IFVIRTUALPTRNAME(cutscene.runner, NAME_ScreenJobRunner, RunFrame)
 		{
+			int ret = 0;
 			VMValue parm[] = { cutscene.runner, smoothratio };
-			VMCall(func, parm, 2, nullptr, 0);
+			VMReturn rets[] = { &ret };
+			VMCall(func, parm, 2, rets, 1);
 		}
 	}
 }

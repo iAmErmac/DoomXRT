@@ -154,7 +154,7 @@ CUSTOM_CVAR(Bool, gl_notexturefill, false, CVAR_NOINITCALL)
 
 CUSTOM_CVAR(Int, gl_maplightmode, -1, CVAR_NOINITCALL | CVAR_CHEAT) // this is just for testing. -1 means 'inactive'
 {
-	if (self > 5 || self < -1) self = -1;
+	if (self > 4 || self < -1) self = -1;
 }
 
 #if !HAVE_RT
@@ -851,7 +851,7 @@ void FLevelLocals::ChangeLevel(const char *levelname, int position, int inflags,
 					player->mo->special1 = 0;
 				}
 				// ]]
-				DoReborn(i, false);
+				DoReborn(i, true);
 			}
 		}
 	}
@@ -1646,6 +1646,9 @@ void FLevelLocals::StartTravel ()
 					inv->ChangeStatNum (STAT_TRAVELLING);
 					inv->UnlinkFromWorld (nullptr);
 					inv->DeleteAttachedLights();
+					tid = inv->tid;
+					inv->SetTID(0);
+					inv->tid = tid;
 				}
 			}
 		}
@@ -1750,7 +1753,7 @@ int FLevelLocals::FinishTravel ()
 		pawn->LinkToWorld (nullptr);
 		pawn->ClearInterpolation();
 		pawn->ClearFOVInterpolation();
-		const int tid = pawn->tid;	// Save TID (actor isn't linked into the hash chain yet)
+		int tid = pawn->tid;	// Save TID (actor isn't linked into the hash chain yet)
 		pawn->tid = 0;				// Reset TID
 		pawn->SetTID(tid);			// Set TID (and link actor into the hash chain)
 		pawn->SetState(pawn->SpawnState);
@@ -1761,6 +1764,10 @@ int FLevelLocals::FinishTravel ()
 			inv->ChangeStatNum (STAT_INVENTORY);
 			inv->LinkToWorld (nullptr);
 			P_FindFloorCeiling(inv, FFCF_ONLYSPAWNPOS);
+			
+			tid = inv->tid;
+			inv->tid = 0;
+			inv->SetTID(tid);
 
 			IFVIRTUALPTRNAME(inv, NAME_Inventory, Travelled)
 			{

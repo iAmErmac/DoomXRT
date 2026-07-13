@@ -85,6 +85,11 @@ class Inventory : Actor
 		Inventory.PickupSound "misc/i_pkup";
 		Inventory.PickupMessage "$TXT_DEFAULTPICKUPMSG";
 	}
+
+	override void OnLoad()
+	{
+		UpdateLocalPickupStatus();
+	}
 	
 	//native override void Tick();
 	
@@ -700,7 +705,7 @@ class Inventory : Actor
 			toucher.HasReceived(self, cls);
 
 			// If the item can be shared, make sure every player gets a copy.
-			if (multiplayer && !deathmatch && !bDropped && ShouldShareItem(toucher))
+			if (multiplayer && !deathmatch && ShouldShareItem(toucher))
 				ShareItemWithPlayers(toucher);
 		}
 		return res, toucher;
@@ -777,7 +782,8 @@ class Inventory : Actor
 		{
 			return NULL;
 		}
-		if (Amount == 1 && !bKeepDepleted)
+		amt = clamp(amt, 1, Amount);
+		if (Amount == amt && !bKeepDepleted)
 		{
 			BecomePickup ();
 			DropTime = 30;
@@ -787,8 +793,6 @@ class Inventory : Actor
 		let copy = Inventory(Spawn (GetClass(), Owner.Pos, NO_REPLACE));
 		if (copy != NULL)
 		{
-			amt = clamp(amt, 1, Amount);
-			
 			copy.MaxAmount = MaxAmount;
 			copy.Amount = amt;
 			copy.DropTime = 30;
@@ -1111,6 +1115,11 @@ class Inventory : Actor
 	clearscope bool HasPickedUpLocally(Actor client) const
 	{
 		return pickedUp[client.PlayerNumber()];
+	}
+
+	void UpdateLocalPickupStatus()
+	{
+		DisableLocalRendering(consoleplayer, pickedUp[consoleplayer]);
 	}
 
 	// When items are dropped, clear their local pick ups.

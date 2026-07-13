@@ -54,6 +54,7 @@ CVAR(Float, underwater_fade_scalar, 1.0f, CVAR_ARCHIVE) // [Nash] user-settable 
 CVAR( Float, blood_fade_scalar, 1.0f, CVAR_ARCHIVE )	// [SP] Pulled from Skulltag - changed default from 0.5 to 1.0
 CVAR( Float, pickup_fade_scalar, 1.0f, CVAR_ARCHIVE )	// [SP] Uses same logic as blood_fade_scalar except for pickups
 
+CVAR(Float, powerup_fade_scalar, 1.0f, CVAR_ARCHIVE) // [Sal] Adjust screen fades for all inventory items
 #if HAVE_RT
 #include "rt/rt_state.h"
 #endif
@@ -120,10 +121,12 @@ void V_AddPlayerBlend (player_t *CPlayer, float blend[4], float maxinvalpha, int
 
 		if (color.a != 0)
 		{
+			// [Sal] Allow powerup fades to be adjusted.
+			float invalpha = (color.a * powerup_fade_scalar) / 255.f;
 #if !HAVE_RT // via postprocessing
-			V_AddBlend (color.r/255.f, color.g/255.f, color.b/255.f, color.a/255.f, blend);
+			V_AddBlend (color.r/255.f, color.g/255.f, color.b/255.f, invalpha, blend);
 #endif
-			if (color.a/255.f > maxinvalpha) maxinvalpha = color.a/255.f;
+			if (invalpha > maxinvalpha) maxinvalpha = invalpha;
 		}
 
 #if HAVE_RT

@@ -58,6 +58,7 @@
 #include "types.h"
 #include "dictionary.h"
 #include "events.h"
+#include "decallib.h"
 
 static TArray<FPropertyInfo*> properties;
 static TArray<AFuncDesc> AFTable;
@@ -354,6 +355,7 @@ static FFlagDef ActorFlagDefs[]=
 	DEFINE_FLAG(MF9, NOSECTORDAMAGE, AActor, flags9),
 	DEFINE_PROTECTED_FLAG(MF9, ISPUFF, AActor, flags9), //[AA] was spawned by SpawnPuff
 	DEFINE_FLAG(MF9, FORCESECTORDAMAGE, AActor, flags9),
+	DEFINE_FLAG(MF9, NOAUTOOFFSKULLFLY, AActor, flags9),
 
 	// Effect flags
 	DEFINE_FLAG(FX, VISIBILITYPULSE, AActor, effects),
@@ -388,6 +390,7 @@ static FFlagDef ActorFlagDefs[]=
 	DEFINE_FLAG(RF2, ISOMETRICSPRITES, AActor, renderflags2),
 	DEFINE_FLAG(RF2, SQUAREPIXELS, AActor, renderflags2),
 	DEFINE_FLAG(RF2, STRETCHPIXELS, AActor, renderflags2),
+	DEFINE_FLAG(RF2, LIGHTMULTALPHA, AActor, renderflags2),
 
 	// Bounce flags
 	DEFINE_FLAG2(BOUNCE_Walls, BOUNCEONWALLS, AActor, BounceFlags),
@@ -407,6 +410,8 @@ static FFlagDef ActorFlagDefs[]=
 	DEFINE_FLAG2(BOUNCE_NotOnShootables, DONTBOUNCEONSHOOTABLES, AActor, BounceFlags),
 	DEFINE_FLAG2(BOUNCE_BounceOnUnrips, BOUNCEONUNRIPPABLES, AActor, BounceFlags),
 	DEFINE_FLAG2(BOUNCE_NotOnSky, DONTBOUNCEONSKY, AActor, BounceFlags),
+	DEFINE_FLAG2(BOUNCE_KeepAngle, KEEPBOUNCEANGLE, AActor, BounceFlags),
+	DEFINE_FLAG2(BOUNCE_ModifyPitch, BOUNCEMODIFIESPITCH, AActor, BounceFlags),
 	
 	DEFINE_FLAG2(OF_Transient, NOSAVEGAME, AActor, ObjectFlags),
 
@@ -761,6 +766,21 @@ void InitThingdef()
 	auto terraindefstruct = NewStruct("TerrainDef", nullptr, true);
 	terraindefstruct->Size = sizeof(FTerrainDef);
 	terraindefstruct->Align = alignof(FTerrainDef);
+
+	auto decalbasestruct = NewStruct("DecalBase", nullptr, true);
+	decalbasestruct->Size = sizeof(FDecalBase);
+	decalbasestruct->Align = alignof(FDecalBase);
+	NewPointer(decalbasestruct, false)->InstallHandlers(
+		[](FSerializer& ar, const char* key, const void* addr)
+		{
+			ar(key, *(FDecalBase**)addr);
+		},
+		[](FSerializer& ar, const char* key, void* addr)
+		{
+			Serialize<FDecalBase>(ar, key, *(FDecalBase**)addr, nullptr);
+			return true;
+		}
+	);
 
 	PStruct *pstruct = NewStruct("PlayerInfo", nullptr, true);
 	pstruct->Size = sizeof(player_t);

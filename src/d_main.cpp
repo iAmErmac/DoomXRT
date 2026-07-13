@@ -2114,7 +2114,7 @@ void D_Display ()
 
 				{
 
-					StatusBar->DrawCrosshair();
+					StatusBar->DrawCrosshair(vp.TicFrac);
 
 				}
 
@@ -2916,7 +2916,7 @@ void D_PageDrawer (void)
 
 		FFont* font = generic_ui ? NewSmallFont : SmallFont;
 
-		DrawFullscreenSubtitle(font, GStrings.CheckString(Subtitle));
+		DrawFullscreenSubtitle(font, Subtitle);
 
 	}
 
@@ -4502,15 +4502,15 @@ static void AddAutoloadFiles(const char *autoname, std::vector<std::string>& all
 
 #ifdef __unix__
 
-		file = SHARE_DIR;
+		FString skinDir = FStringf("%s/games/" GAMENAMELOWERCASE "/skins", GetDataPath());
+		file = NicePath(skinDir.GetChars());
 
 #else
 
 		file = progdir;
+		file += "skins";
 
 #endif
-
-		file += "skins";
 
 		D_AddDirectory (allwads, file.GetChars(), "*.wad", GameConfig);
 
@@ -5958,6 +5958,11 @@ static bool System_DisableTextureFilter()
 
 
 
+static bool System_DisableAnisotropicFiltering()
+{
+	return V_DisableIntelMipmap();
+}
+
 static void System_OnScreenSizeChanged()
 
 {
@@ -6784,12 +6789,10 @@ static int D_InitGame(const FIWADInfo* iwad_info, std::vector<std::string>& allw
 
 	// Workaround for old Doom filter names.
 
-	if (LumpFilterIWAD.Compare("doom.id.doom") == 0)
-
+	if (LumpFilterIWAD.IndexOf("doom.id.doom") >= 0)
 	{
-
-		lfi.gameTypeFilter.push_back("doom.doom");
-
+		FString NewFilterName = (FString)"doom.doom" + LumpFilterIWAD.Mid(12);
+		lfi.gameTypeFilter.push_back(NewFilterName.GetChars());
 	}
 
 
@@ -7856,9 +7859,10 @@ static int D_DoomMain_Internal (void)
 
 		[]() ->FConfigFile* { return GameConfig; },
 
-		nullptr, 
+		nullptr,
 
-		RemapUserTranslation
+		RemapUserTranslation,
+		System_DisableAnisotropicFiltering
 
 	};
 
@@ -8050,7 +8054,33 @@ static int D_DoomMain_Internal (void)
 
 		lastIWAD = iwad;
 
+		if (GameStartupInfo.DiscordAppId.GetChars())
+		{
+			const char* check = GameStartupInfo.DiscordAppId.GetChars();
+			uint32_t index = 0;
+			bool failedcheck = false;
+			while (!failedcheck && check[index])
+			{
+				if (check[index] < '0' || check[index] > '9') failedcheck = true;
+				index++;
+			}
+			if (failedcheck)
+				GameStartupInfo.DiscordAppId = "";
+		}
 
+		if (GameStartupInfo.SteamAppId.GetChars())
+		{
+			const char* check = GameStartupInfo.SteamAppId.GetChars();
+			uint32_t index = 0;
+			bool failedcheck = false;
+			while (!failedcheck && check[index])
+			{
+				if (check[index] < '0' || check[index] > '9') failedcheck = true;
+				index++;
+			}
+			if (failedcheck)
+				GameStartupInfo.SteamAppId = "";
+		}
 
 		int ret = D_InitGame(iwad_info, allwads, pwads);
 

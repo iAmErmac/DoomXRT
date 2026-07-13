@@ -2373,7 +2373,7 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
                 cvar::rt_remix_taa == 0 &&    //
                 cvar::rt_ef_vintage == 0 )
             {
-                cvar::rt_remix_taa = cvar::rt_upscale_fsr2;
+                cvar::rt_remix_taa = int( cvar::rt_upscale_fsr2 );
             }
             cvar::rt_upscale_fsr2 = 0;
             cvar::rt_ef_vintage   = 0;
@@ -2385,7 +2385,7 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
                 cvar::rt_remix_taa > 0 &&    //
                 cvar::rt_ef_vintage == 0 )
             {
-                cvar::rt_upscale_fsr2 = cvar::rt_remix_taa;
+                cvar::rt_upscale_fsr2 = int( cvar::rt_remix_taa );
             }
             cvar::rt_remix_taa = 0;
         }
@@ -4858,7 +4858,7 @@ static void RT_ClearTitles()
     g_title_soundplayed = false;
 }
 
-extern bool rt_isdoom2;
+bool rt_isdoom2 = false;
 
 static void RT_InjectTitleIntoDoomMap( const char* mapname )
 {

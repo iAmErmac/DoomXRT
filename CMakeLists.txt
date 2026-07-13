@@ -29,7 +29,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR (NOT CMAKE_SYSTEM_NAME AND CMAKE_HOS
 	set(VCPKG_TARGET_TRIPLET "x64-windows-static")
 endif()
 
-project(GZDoom)
+project(UZDoom)
 
 if (WIN32 AND VCPKG_TOOLCHAIN)
 	option(LIBVPX_VCPKG "Use libvpx from vcpkg" OFF)
@@ -43,20 +43,7 @@ if (NOT VCPKG_TOOLCHAIN)
 	set(VCPKG_MANIFEST_FEATURES)
 endif()
 
-if( WIN32 )
-	set( HAVE_RT_DEFAULT ON )
-else()
-	set( HAVE_RT_DEFAULT OFF )
-endif()
-option( HAVE_RT "Enable RayTracing support" ${HAVE_RT_DEFAULT} )
-set( RTGL1_SDK_PATH "$ENV{RTGL1_SDK_PATH}" CACHE PATH "Path to the RTGL1 SDK root directory" )
-
-
-if( HAVE_RT )
-	set(CMAKE_CXX_STANDARD 20)
-else()
-	set(CMAKE_CXX_STANDARD 17)
-endif()
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) 
 
@@ -144,7 +131,7 @@ function( add_pk3 PK3_NAME PK3_DIR )
 	if( WIN32 )
 		set( INSTALL_PK3_PATH . CACHE STRING "Directory where zdoom.pk3 will be placed during install." )
 	else()
-		set( INSTALL_PK3_PATH share/games/doom CACHE STRING "Directory where zdoom.pk3 will be placed during install." )
+		set( INSTALL_PK3_PATH share/games/${ZDOOM_EXE_NAME} CACHE STRING "Directory where zdoom.pk3 will be placed during install." )
 	endif()
 	install(FILES "${PROJECT_BINARY_DIR}/${PK3_NAME}"
 			DESTINATION ${INSTALL_PK3_PATH}
@@ -168,11 +155,7 @@ IF( NOT CMAKE_BUILD_TYPE )
 ENDIF()
 
 set( ZDOOM_OUTPUT_DIR ${CMAKE_BINARY_DIR} CACHE PATH "Directory where zdoom.pk3 and the executable will be created." )
-if( HAVE_RT )
-	set( ZDOOM_EXE_NAME "gzdoom" CACHE FILEPATH "Name of the executable to create" )
-else()
-	set( ZDOOM_EXE_NAME "gzdoom-rt" CACHE FILEPATH "Name of the executable to create" )
-endif()
+set( ZDOOM_EXE_NAME "uzdoom" CACHE FILEPATH "Name of the executable to create" )
 if( MSVC )
 	# Allow the user to use ZDOOM_OUTPUT_DIR as a single release point.
 	# Use zdoom, zdoomd, zdoom64, and zdoomd64 for the binary names
@@ -232,26 +215,6 @@ option( NO_OPENAL "Disable OpenAL sound support" OFF )
 
 find_package( BZip2 )
 find_package( VPX )
-find_package( WebP QUIET )
-if (NOT WebP_FOUND)
-	find_package( PkgConfig QUIET )
-	if (PkgConfig_FOUND)
-		pkg_check_modules(libwebp QUIET IMPORTED_TARGET libwebp)
-		pkg_check_modules(libwebpmux QUIET IMPORTED_TARGET libwebpmux)
-		pkg_check_modules(libwebpdemux QUIET IMPORTED_TARGET libwebpdemux)
-		if (TARGET PkgConfig::libwebp AND TARGET PkgConfig::libwebpmux AND TARGET PkgConfig::libwebpdemux)
-			add_library(WebP::webp ALIAS PkgConfig::libwebp)
-			add_library(WebP::webpdemux ALIAS PkgConfig::libwebpdemux)
-			add_library(WebP::libwebpmux ALIAS PkgConfig::libwebpmux)
-			set(WebP_FOUND TRUE)
-		endif()
-	endif()
-endif()
-if (WebP_FOUND)
-	add_definitions(-DHAVE_WEBP=1)
-else()
-	add_definitions(-DHAVE_WEBP=0)
-endif()
 
 include( TargetArch )
 
@@ -261,12 +224,8 @@ if( ${TARGET_ARCHITECTURE} MATCHES "x86_64" )
 	set( HAVE_VM_JIT ON )
 endif()
 
-if (HAVE_RT)
-	option (HAVE_VULKAN "Enable Vulkan support" ON)
-else()
-	option (HAVE_VULKAN "Enable Vulkan support" OFF)
-endif()
-option (HAVE_GLES2 "Enable GLES2 support" OFF)
+option (HAVE_VULKAN "Enable Vulkan support" ON)
+option (HAVE_GLES2 "Enable GLES2 support" ON)
 
 # no, we're not using external asmjit for now, we made too many modifications to our's.
 # if the asmjit author uses our changes then we'll update this.
@@ -284,12 +243,6 @@ if( MSVC )
 	# Function-level linking
 	# Disable run-time type information
 	set( ALL_C_FLAGS "/GF /Gy /permissive- /utf-8" )
-
-	if ( HAVE_RT )
-		set( ALL_C_FLAGS "${ALL_C_FLAGS} /DHAVE_RT=1" )
-	else()
-		set( ALL_C_FLAGS "${ALL_C_FLAGS} /DHAVE_RT=0" )
-	endif()
 
 	if ( HAVE_VULKAN )
 		set( ALL_C_FLAGS "${ALL_C_FLAGS} /DHAVE_VULKAN" )
@@ -323,12 +276,6 @@ if( MSVC )
 else()
 	set( REL_LINKER_FLAGS "" )
 	set( ALL_C_FLAGS "-ffp-contract=off" )
-	
-	if ( HAVE_RT )
-		set( ALL_C_FLAGS "${ALL_C_FLAGS} -DHAVE_RT=1" )
-	else()
-		set( ALL_C_FLAGS "${ALL_C_FLAGS} -DHAVE_RT=0" )
-	endif()
 
 	if ( HAVE_VULKAN )
 		set( ALL_C_FLAGS "${ALL_C_FLAGS} -DHAVE_VULKAN" )
@@ -362,7 +309,7 @@ else()
 			# If we're compiling with a custom GCC on the Mac (which we know since g++-4.2 doesn't support C++11) statically link libgcc.
 			set( ALL_C_FLAGS "-static-libgcc" )
 		endif()
-	elseif( NOT MINGW )
+	elseif( NOT MINGW AND NOT HAIKU )
 		# Generic GCC/Clang requires position independent executable to be enabled explicitly
 		set( ALL_C_FLAGS "${ALL_C_FLAGS} -fPIE" )
 		set( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pie" )

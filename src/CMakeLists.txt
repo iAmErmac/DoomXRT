@@ -1268,6 +1268,12 @@ list( REMOVE_ITEM GAME_NONPCH_SOURCES ${PCH_SOURCES} )
 
 add_executable( zdoom WIN32 MACOSX_BUNDLE ${GAME_SOURCES} )
 
+target_compile_features(zdoom PRIVATE cxx_std_20)
+
+target_compile_definitions( zdoom PRIVATE HAVE_RT=1 )
+
+target_include_directories( zdoom PRIVATE ${CMAKE_BINARY_DIR} )
+
 if( HAVE_RT )
 	if( RTGL1_SDK_PATH )
 		include_directories( "${RTGL1_SDK_PATH}/Include" )
@@ -1445,7 +1451,7 @@ endif()
 
 add_custom_command(TARGET zdoom POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different
-	${CMAKE_SOURCE_DIR}/soundfont/gzdoom.sf2 $<TARGET_FILE_DIR:zdoom>/soundfonts/gzdoom.sf2
+	${CMAKE_SOURCE_DIR}/soundfont/uzdoom.sf2 $<TARGET_FILE_DIR:zdoom>/soundfonts/uzdoom.sf2
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different
 	${CMAKE_SOURCE_DIR}/fm_banks/GENMIDI.GS.wopl $<TARGET_FILE_DIR:zdoom>/fm_banks/GENMIDI.GS.wopl
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different

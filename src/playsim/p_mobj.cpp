@@ -392,7 +392,6 @@ IMPLEMENT_POINTERS_START(AActor)
 
 	IMPLEMENT_POINTER(modelData)
 
-	IMPLEMENT_POINTER(boneComponentData)
 
 IMPLEMENT_POINTERS_END
 
@@ -3452,7 +3451,7 @@ DEFINE_ACTION_FUNCTION(AActor, ExplodeMissile)
 
 
 
-void AActor::PlayBounceSound(bool onfloor)
+void AActor::PlayBounceSound(bool onfloor, double volume)
 
 {
 
@@ -3522,7 +3521,7 @@ bool AActor::FloorBounceMissile (secplane_t &plane, bool is3DFloor)
 
 	{
 
-		switch (SpecialBounceHit(nullptr, nullptr, &plane))
+		switch (SpecialBounceHit(nullptr, nullptr, &plane, is3DFloor))
 
 		{
 
@@ -3718,7 +3717,7 @@ bool AActor::FloorBounceMissile (secplane_t &plane, bool is3DFloor)
 
 
 
-	PlayBounceSound(true);
+	PlayBounceSound(true, 1.0);
 
 
 
@@ -4678,7 +4677,7 @@ static double P_XYMovement (AActor *mo, DVector2 scroll)
 
 					{
 
-						mo->PlayBounceSound(false);
+						mo->PlayBounceSound(false, 1.0);
 
 						return Oldfloorz;
 
@@ -6866,7 +6865,7 @@ int AActor::SpecialMissileHit (AActor *victim)
 
 // This virtual method only exists on the script side.
 
-int AActor::SpecialBounceHit(AActor* bounceMobj, line_t* bounceLine, secplane_t* bouncePlane)
+int AActor::SpecialBounceHit(AActor* bounceMobj, line_t* bounceLine, secplane_t* bouncePlane, bool is3DFloor)
 
 {
 
@@ -6874,7 +6873,7 @@ int AActor::SpecialBounceHit(AActor* bounceMobj, line_t* bounceLine, secplane_t*
 
 	{
 
-		VMValue params[4] = { (DObject*)this, bounceMobj, bounceLine, bouncePlane };
+		VMValue params[] = { (DObject*)this, bounceMobj, bounceLine, bouncePlane, is3DFloor };
 
 		VMReturn ret;
 
@@ -6882,7 +6881,7 @@ int AActor::SpecialBounceHit(AActor* bounceMobj, line_t* bounceLine, secplane_t*
 
 		ret.IntAt(&retval);
 
-		VMCall(func, params, 4, &ret, 1);
+		VMCall(func, params, 5, &ret, 1);
 
 		return retval;
 
@@ -11652,7 +11651,7 @@ AActor *FLevelLocals::SpawnPlayer (FPlayerStart *mthing, int playernum, int flag
 
 			// after the player has respawned.
 
-			AActor *th;
+			AActor *th = nullptr;
 
 			auto it = GetThinkerIterator<AActor>();
 
@@ -12920,11 +12919,11 @@ DEFINE_ACTION_FUNCTION(AActor, SpawnPuff)
 
 
 
-void P_SpawnBlood (const DVector3 &pos1, DAngle dir, int damage, AActor *originator)
+AActor *P_SpawnBlood (const DVector3 &pos1, DAngle dir, int damage, AActor *originator)
 
 {
 
-	AActor *th;
+	AActor *th = nullptr;
 
 	PClassActor *bloodcls = originator->GetBloodType();
 
@@ -13139,9 +13138,9 @@ void P_SpawnBlood (const DVector3 &pos1, DAngle dir, int damage, AActor *origina
 
 
 	if (bloodtype >= 1)
+	P_DrawSplash2 (originator->Level, 40, pos, dir, 2, originator->BloodColor);
 
-		P_DrawSplash2 (originator->Level, 40, pos, dir, 2, originator->BloodColor);
-
+	return th;
 }
 
 
@@ -13162,9 +13161,7 @@ DEFINE_ACTION_FUNCTION(AActor, SpawnBlood)
 
 	PARAM_INT(damage);
 
-	P_SpawnBlood(DVector3(x, y, z), dir, damage, self);
-
-	return 0;
+	ACTION_RETURN_OBJECT(P_SpawnBlood(DVector3(x, y, z), dir, damage, self));
 
 }
 
@@ -13404,7 +13401,7 @@ void P_RipperBlood (AActor *mo, AActor *bleeder)
 
 	{
 
-		AActor *th;
+		AActor *th = nullptr;
 
 		th = Spawn (bleeder->Level, bloodcls, pos, NO_REPLACE); // GetBloodType already performed the replacement
 
@@ -15456,7 +15453,7 @@ int AActor::CallDoSpecialDamage(AActor *target, int damage, FName damagetype)
 
 		ret.IntAt(&retval);
 
-		VMCall(func, params, 4, &ret, 1);
+		VMCall(func, params, 5, &ret, 1);
 
 		return retval;
 

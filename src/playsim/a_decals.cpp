@@ -755,7 +755,7 @@ DBaseDecal* DImpactDecal::StaticCreate (FLevelLocals *Level, const FDecalTemplat
 		}
 
 		// [Nash] opaque blood
-		if (bloodTranslation != NO_TRANSLATION && tpl->ShadeColor == 0 && tpl->opaqueBlood)
+		if (bloodTranslation != NO_TRANSLATION && tpl->ShadeColor == 0)
 		{
 			decal->SetTranslation(bloodTranslation);
 			decal->RenderStyle = STYLE_Normal;
@@ -795,7 +795,7 @@ DBaseDecal *DImpactDecal::CloneSelf (const FDecalTemplate *tpl, double ix, doubl
 			decal->AlphaColor = AlphaColor;
 
 			// [Nash] opaque blood
-			if (tpl->ShadeColor == 0 && tpl->opaqueBlood)
+			if (tpl->ShadeColor == 0)
 			{
 				decal->SetTranslation(Translation);
 				decal->RenderStyle = STYLE_Normal;
@@ -819,7 +819,7 @@ DBaseDecal *DImpactDecal::CloneSelf (const FDecalTemplate *tpl, double ix, doubl
 //
 //----------------------------------------------------------------------------
 
-void SprayDecal(AActor *shooter, const char *name, double distance, DVector3 offset, DVector3 direction, bool useBloodColor, uint32_t decalColor)
+void SprayDecal(AActor *shooter, const char *name, double distance, DVector3 offset, DVector3 direction, bool useBloodColor, uint32_t decalColor, FTranslationID translation)
 {
 	//just in case
 	if (!shooter)
@@ -847,7 +847,7 @@ void SprayDecal(AActor *shooter, const char *name, double distance, DVector3 off
 	else
 		dir = direction;
 
-	auto bloodTrans = useBloodColor ? shooter->BloodTranslation : NO_TRANSLATION;
+	auto bloodTrans = useBloodColor ? shooter->BloodTranslation : translation;
 	PalEntry entry = !useBloodColor ? (PalEntry)decalColor : shooter->BloodColor;
 
 	if (Trace(off, shooter->Sector, dir, distance, 0, ML_BLOCKEVERYTHING, shooter, trace, TRACE_NoSky))

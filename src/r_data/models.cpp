@@ -87,9 +87,8 @@
 #include "texturemanager.h"
 
 #include "modelrenderer.h"
-
-#include "actor.h"
-
+#include "v_video.h"
+#include "hw_bonebuffer.h"
 #include "actorinlines.h"
 
 
@@ -810,7 +809,7 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 
 
 
-	TArray<VSMatrix> boneData;
+	const TArray<VSMatrix> *boneData = nullptr;
 
 	int boneStartingPosition = 0;
 
@@ -1059,28 +1058,7 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 
 
 			bool nextFrame = smfNext && modelframe != modelframenext;
-
-
-
-			if (actor->boneComponentData == nullptr)
-
-			{
-
-				auto ptr = Create<DBoneComponents>();
-
-				ptr->trscomponents.Resize(modelsamount);
-
-				ptr->trsmatrix.Resize(modelsamount);
-
-				actor->boneComponentData = ptr;
-
-				GC::WriteBarrier(actor, ptr);
-
-			}
-
-
-
-			// [RL0] while per-model animations aren't done, DECOUPLEDANIMATIONS does the same as MODELSAREATTACHMENTS
+// [RL0] while per-model animations aren't done, DECOUPLEDANIMATIONS does the same as MODELSAREATTACHMENTS
 
 			if(!evaluatedSingle)
 
@@ -1112,7 +1090,7 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 
 					{
 
-						boneData = animation->CalculateBones(actor->modelData->prevAnim, decoupled_frame, inter, animationData, actor->boneComponentData, i);
+						boneData = animation->CalculateBones(actor->modelData->prevAnim, decoupled_frame, inter, animationData);
 
 					}
 
@@ -1122,11 +1100,11 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 
 				{
 
-					boneData = animation->CalculateBones(nullptr, {nextFrame ? inter : -1.0f, modelframe, modelframenext}, -1.0f, animationData, actor->boneComponentData, i);
+					boneData = animation->CalculateBones(nullptr, {nextFrame ? inter : -1.0f, modelframe, modelframenext}, -1.0f, animationData);
 
 				}
 
-				boneStartingPosition = renderer->SetupFrame(animation, 0, 0, 0, boneData, -1);
+				boneStartingPosition = boneData ? screen->mBones->UploadBones(*boneData) : -1;
 
 				evaluatedSingle = (smf_flags & MDL_MODELSAREATTACHMENTS) || is_decoupled;
 
@@ -1134,7 +1112,7 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 
 
 
-			mdl->RenderFrame(renderer, tex, modelframe, nextFrame ? modelframenext : modelframe, nextFrame ? inter : -1.f, translation, ssidp, boneData, boneStartingPosition);
+			mdl->RenderFrame(renderer, tex, modelframe, nextFrame ? modelframenext : modelframe, nextFrame ? inter : -1.f, translation, ssidp, boneStartingPosition);
 
 		}
 
@@ -2198,7 +2176,7 @@ FSpriteModelFrame * FindModelFrameRaw(const PClass * ti, int sprite, int frame, 
 
 		{
 
-			FSpriteModelFrame * smf = BaseSpriteModelFrames.CheckKey((void*)ti);
+			FSpriteModelFrame * smf = BaseSpriteModelFrames.CheckKey(ti);
 
 			if(smf) return smf;
 
@@ -2280,30 +2258,41 @@ FSpriteModelFrame * FindModelFrameRaw(const PClass * ti, int sprite, int frame, 
 
 
 
-FSpriteModelFrame * FindModelFrame(const AActor * thing, int sprite, int frame, bool dropped)
-
+FSpriteModelFrame * FindModelFrame(const PClass * ti, int sprite, int frame, bool dropped)
 {
+	auto def = GetDefaultByType(ti);
 
+	if (def->hasmodel)
+	{
+		if(def->flags9 & MF9_DECOUPLEDANIMATIONS)
+		{
+			FSpriteModelFrame * smf = BaseSpriteModelFrames.CheckKey(ti);
+			if(smf) return smf;
+		}
+	}
+
+	return FindModelFrameRaw(ti, sprite, frame, dropped);
+}
+
+FSpriteModelFrame * FindModelFrame(const PClass * ti, bool is_decoupled, int sprite, int frame, bool dropped)
+{
+	if(!ti) return nullptr;
+
+	if(is_decoupled)
+	{
+		return BaseSpriteModelFrames.CheckKey(ti);
+	}
+	else
+	{
+		return FindModelFrameRaw(ti, sprite, frame, dropped);
+	}
+}
+
+FSpriteModelFrame * FindModelFrame(AActor * thing, int sprite, int frame, bool dropped)
+{
 	if(!thing) return nullptr;
 
-
-
-	if(thing->flags9 & MF9_DECOUPLEDANIMATIONS)
-
-	{
-
-		return BaseSpriteModelFrames.CheckKey((thing->modelData != nullptr && thing->modelData->modelDef != nullptr) ? thing->modelData->modelDef : thing->GetClass());
-
-	}
-
-	else
-
-	{
-
-		return FindModelFrameRaw((thing->modelData != nullptr && thing->modelData->modelDef != nullptr) ? thing->modelData->modelDef : thing->GetClass(), sprite, frame, dropped);
-
-	}
-
+	return FindModelFrame((thing->modelData != nullptr && thing->modelData->modelDef != nullptr) ? thing->modelData->modelDef : thing->GetClass(), (thing->flags9 & MF9_DECOUPLEDANIMATIONS), sprite, frame, dropped);
 }
 
 
