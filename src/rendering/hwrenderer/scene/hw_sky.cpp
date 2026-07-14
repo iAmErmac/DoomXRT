@@ -144,9 +144,9 @@ void HWWall::SkyPlane(HWWallDispatcher *di, sector_t *sector, int plane, bool al
 	// Either a regular sky or a skybox with skyboxes disabled
 	if ((sportal == nullptr && sector->GetTexture(plane) == skyflatnum) || (gl_noskyboxes && sportal != nullptr && sportal->mType == PORTS_SKYVIEWPOINT))
 	{
-		HWSkyInfo skyinfo;
 		if (di->di)
 		{
+			HWSkyInfo skyinfo;
 			skyinfo.init(di->di, sector, plane, sector->skytransfer, Colormap.FadeColor);
 			ptype = PORTALTYPE_SKY;
 			sky = &skyinfo;
@@ -161,17 +161,11 @@ void HWWall::SkyPlane(HWWallDispatcher *di, sector_t *sector, int plane, bool al
 		case PORTS_PORTAL:
 		case PORTS_LINKEDPORTAL:
 		{
-			if (di->di && di->di->Viewpoint.IsAllowedOoB())
-			{
-				secplane_t myplane = plane ? sector->ceilingplane : sector->floorplane;
-				if (di->di->Viewpoint.IsOrtho() && di->di->Viewpoint.ViewVector3D.dot(myplane.Normal()) > 0.0) return;
-				else if (plane==1 && di->di->Viewpoint.Pos.Z >= myplane.ZatPoint(di->di->Viewpoint.Pos)) return;
-				else if (plane==0 && di->di->Viewpoint.Pos.Z <= myplane.ZatPoint(di->di->Viewpoint.Pos)) return;
-			}
 			auto glport = sector->GetPortalGroup(plane);
 			if (glport != NULL)
 			{
 				if (sector->PortalBlocksView(plane)) return;
+
 				if (di->di && screen->instack[1 - plane]) return;
 				ptype = PORTALTYPE_SECTORSTACK;
 				portal = glport;
@@ -326,10 +320,7 @@ void HWWall::SkyTop(HWWallDispatcher *di, seg_t * seg,sector_t * fs,sector_t * b
 			if (backreflect > 0 && bs->ceilingplane.fD() == fs->ceilingplane.fD() && !bs->isClosed())
 			{
 				// Don't add intra-portal line to the portal.
-				if (!(di->di && di->di->Viewpoint.IsAllowedOoB()))
-				{
-					return;
-				}
+				return;
 			}
 		}
 		else
@@ -408,10 +399,7 @@ void HWWall::SkyBottom(HWWallDispatcher *di, seg_t * seg,sector_t * fs,sector_t 
 			if (backreflect > 0 && bs->floorplane.fD() == fs->floorplane.fD() && !bs->isClosed())
 			{
 				// Don't add intra-portal line to the portal.
-				if (!(di->di && di->di->Viewpoint.IsAllowedOoB()))
-				{
-					return;
-				}
+				return;
 			}
 		}
 		else

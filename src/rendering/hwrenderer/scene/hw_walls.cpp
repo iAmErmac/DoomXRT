@@ -86,32 +86,10 @@ void SetSplitPlanes(FRenderState& state, const secplane_t& top, const secplane_t
 
 void HWWall::RenderWall(FRenderState &state, int textured)
 {
-	bool ditherT = (type == RENDERWALL_BOTTOM) && (seg->sidedef->Flags & WALLF_DITHERTRANS_BOTTOM);
-	ditherT |= (type == RENDERWALL_TOP) && (seg->sidedef->Flags & WALLF_DITHERTRANS_TOP);
-	ditherT = ditherT || (seg->sidedef->Flags & WALLF_DITHERTRANS_MID);
-	if (ditherT)
-	{
-		state.SetEffect(EFF_DITHERTRANS);
-	}
 	assert(vertcount > 0);
 	state.SetLightIndex(dynlightindex);
 	state.Draw(DT_TriangleFan, vertindex, vertcount);
 	vertexcount += vertcount;
-	if (ditherT)
-	{
-		state.SetEffect(EFF_NONE);
-		switch(type) // reset this every frame
-		{
-		case RENDERWALL_TOP:
-			seg->sidedef->Flags &= ~WALLF_DITHERTRANS_TOP;
-			break;
-		case RENDERWALL_BOTTOM:
-			seg->sidedef->Flags &= ~WALLF_DITHERTRANS_BOTTOM;
-			break;
-		default:
-			if (seg->sidedef->dithertranscount-- <= 0) seg->sidedef->Flags &= ~WALLF_DITHERTRANS_MID;
-		}
-	}
 }
 
 //==========================================================================
@@ -667,8 +645,7 @@ void HWWall::PutPortal(HWWallDispatcher *di, int ptype, int plane)
 			break;
 
 		case PORTALTYPE_PLANEMIRROR:
-			if (ddi->Viewpoint.IsOrtho() ? (ddi->Viewpoint.ViewVector3D.dot(planemirror->Normal()) < 0)
-				: (portalState.PlaneMirrorMode * planemirror->fC() <= 0))
+			if (portalState.PlaneMirrorMode * planemirror->fC() <= 0)
 			{
 				planemirror = portalState.UniquePlaneMirrors.Get(planemirror);
 				portal = ddi->FindPortal(planemirror);
@@ -1442,7 +1419,7 @@ void HWWall::DoMidTexture(HWWallDispatcher *di, seg_t * seg, bool drawfogboundar
 		if (!tex || !tex->isValid())
 		{
 			if (front->GetTexture(sector_t::ceiling) == skyflatnum &&
-				back->GetTexture(sector_t::ceiling) == skyflatnum && !wrap && skew == 0)
+				back->GetTexture(sector_t::ceiling) == skyflatnum && !wrap)
 			{
 				// intra-sky lines do not clip the texture at all if there's no upper texture.
 				topleft = topright = texturetop;

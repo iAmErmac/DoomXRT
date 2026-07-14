@@ -131,19 +131,12 @@ HWDrawInfo *HWDrawInfo::StartDrawInfo(FLevelLocals *lev, HWDrawInfo *parent, FRe
 //==========================================================================
 
 static Clipper staticClipper;		// Since all scenes are processed sequentially we only need one clipper.
-static Clipper staticVClipper;		// Another clipper to clip vertically (used if (VPSF_ALLOWOUTOFBOUNDS & camera->viewpos->Flags)).
-static Clipper staticRClipper;		// Another clipper for radar (doesn't actually clip. Changes SSECMF_DRAWN setting).
 static HWDrawInfo * gl_drawinfo;	// This is a linked list of all active DrawInfos and needed to free the memory arena after the last one goes out of scope.
 
 void HWDrawInfo::StartScene(FRenderViewpoint &parentvp, HWViewpointUniforms *uniforms)
 {
 	staticClipper.Clear();
-	staticVClipper.Clear();
-	staticRClipper.Clear();
 	mClipper = &staticClipper;
-	vClipper = &staticVClipper;
-	rClipper = &staticRClipper;
-	rClipper->amRadar = true;
 
 	Viewpoint = parentvp;
 	lightmode = getRealLightmode(Level, true);
@@ -160,7 +153,6 @@ void HWDrawInfo::StartScene(FRenderViewpoint &parentvp, HWViewpointUniforms *uni
 		VPUniforms.mProjectionMatrix.loadIdentity();
 		VPUniforms.mViewMatrix.loadIdentity();
 		VPUniforms.mNormalViewMatrix.loadIdentity();
-		ProjectionMatrix2.loadIdentity();
 		VPUniforms.mViewHeight = viewheight;
 		if (lightmode == ELightMode::Build)
 		{
@@ -177,8 +169,6 @@ void HWDrawInfo::StartScene(FRenderViewpoint &parentvp, HWViewpointUniforms *uni
 		VPUniforms.mLightBlendMode = (level.info ? (int)level.info->lightblendmode : 0);
 	}
 	mClipper->SetViewpoint(Viewpoint);
-	vClipper->SetViewpoint(Viewpoint);
-	rClipper->SetViewpoint(Viewpoint);
 
 	ClearBuffers();
 
@@ -267,9 +257,7 @@ void HWDrawInfo::ClearBuffers()
 
 void HWDrawInfo::UpdateCurrentMapSection()
 {
-	int mapsection = Level->PointInRenderSubsector(Viewpoint.Pos)->mapsection;
-	if (Viewpoint.IsAllowedOoB() || Viewpoint.IsOrtho())
-		mapsection = Level->PointInRenderSubsector(Viewpoint.OffPos)->mapsection;
+	const int mapsection = Level->PointInRenderSubsector(Viewpoint.Pos)->mapsection;
 	CurrentMapSections.Set(mapsection);
 }
 
@@ -282,11 +270,9 @@ void HWDrawInfo::UpdateCurrentMapSection()
 
 void HWDrawInfo::SetViewArea()
 {
-	auto &vp = Viewpoint;
+    auto &vp = Viewpoint;
 	// The render_sector is better suited to represent the current position in GL
 	vp.sector = Level->PointInRenderSubsector(vp.Pos)->render_sector;
-	if (Viewpoint.IsAllowedOoB())
-		vp.sector = Level->PointInRenderSubsector(vp.camera->Pos())->render_sector;
 
 	// Get the heightsec state from the render sector, not the current one!
 	if (vp.sector->GetHeightSec())
@@ -363,46 +349,19 @@ int HWDrawInfo::SetFullbrightFlags(player_t *player)
 //
 //-----------------------------------------------------------------------------
 
-angle_t OoBFrustumAngle(FRenderViewpoint* Viewpoint)
-{
-	// If pitch is larger than this you can look all around at an FOV of 90 degrees
-	if (fabs(Viewpoint->HWAngles.Pitch.Degrees()) > 89.0)  return 0xffffffff;
-	int aspMult = AspectMultiplier(r_viewwindow.WidescreenRatio); // 48 == square window
-	double absPitch = fabs(Viewpoint->HWAngles.Pitch.Degrees());
-	 // Smaller aspect ratios still clip too much. Need a better solution
-	if (aspMult > 36 && absPitch > 30.0)  return 0xffffffff;
-	else if (aspMult > 40 && absPitch > 25.0)  return 0xffffffff;
-	else if (aspMult > 45 && absPitch > 20.0)  return 0xffffffff;
-	else if (aspMult > 47 && absPitch > 10.0) return 0xffffffff;
-
-	double xratio = r_viewwindow.FocalTangent / Viewpoint->PitchCos;
-	double floatangle = 0.05 + atan ( xratio ) * 48.0 / aspMult; // this is radians
-	angle_t a1 = DAngle::fromRad(floatangle).BAMs();
-
-	if (a1 >= ANGLE_90) return 0xffffffff;
-	return a1;
-}
-
 angle_t HWDrawInfo::FrustumAngle()
 {
-	if (Viewpoint.IsAllowedOoB())
-	{
-		return OoBFrustumAngle(&Viewpoint);
-	}
-	else
-	{
-		float tilt = fabs(Viewpoint.HWAngles.Pitch.Degrees());
+	float tilt = fabs(Viewpoint.HWAngles.Pitch.Degrees());
 
-		// If the pitch is larger than this you can look all around at a FOV of 90°
-		if (tilt > 46.0f) return 0xffffffff;
+	// If the pitch is larger than this you can look all around at a FOV of 90°
+	if (tilt > 46.0f) return 0xffffffff;
 
-		// ok, this is a gross hack that barely works...
-		// but at least it doesn't overestimate too much...
-		double floatangle = 2.0 + (45.0 + ((tilt / 1.9)))*Viewpoint.FieldOfView.Degrees() * 48.0 / AspectMultiplier(r_viewwindow.WidescreenRatio) / 90.0;
-		angle_t a1 = DAngle::fromDeg(floatangle).BAMs();
-		if (a1 >= ANGLE_180) return 0xffffffff;
-		return a1;
-	}
+	// ok, this is a gross hack that barely works...
+	// but at least it doesn't overestimate too much...
+	double floatangle = 2.0 + (45.0 + ((tilt / 1.9)))*Viewpoint.FieldOfView.Degrees() * 48.0 / AspectMultiplier(r_viewwindow.WidescreenRatio) / 90.0;
+	angle_t a1 = DAngle::fromDeg(floatangle).BAMs();
+	if (a1 >= ANGLE_180) return 0xffffffff;
+	return a1;
 }
 
 //-----------------------------------------------------------------------------
@@ -479,17 +438,8 @@ HWDecal *HWDrawInfo::AddDecal(bool onmirror)
 void HWDrawInfo::CreateScene(bool drawpsprites)
 {
 	const auto &vp = Viewpoint;
-	angle_t a1 = FrustumAngle(); // horizontally clip the back of the viewport
+	angle_t a1 = FrustumAngle();
 	mClipper->SafeAddClipRangeRealAngles(vp.Angles.Yaw.BAMs() + a1, vp.Angles.Yaw.BAMs() - a1);
-	Viewpoint.FrustAngle = a1;
-	if (Viewpoint.IsAllowedOoB()) // No need for vertical clipper if viewpoint not allowed out of bounds
-	{
-		double a2 = 20.0 + 0.5*Viewpoint.FieldOfView.Degrees(); // FrustumPitch for vertical clipping
-		if (a2 > 179.0) a2 = 179.0;
-		double pitchmult = !!(portalState.PlaneMirrorFlag & 1) ? -1.0 : 1.0;
-		vClipper->SafeAddClipRangeDegPitches(pitchmult * vp.HWAngles.Pitch.Degrees() - a2, pitchmult * vp.HWAngles.Pitch.Degrees() + a2); // clip the suplex range
-		Viewpoint.PitchSin *= pitchmult;
-	}
 
 	// reset the portal manager
 	portalState.StartFrame();
@@ -698,154 +648,6 @@ void HWDrawInfo::DrawCorona(FRenderState& state, ACorona* corona, double dist)
 #endif
 }
 
-//==========================================================================
-//
-// TraceCallbackForDitherTransparency
-// Toggles dither flag on anything that occludes the actor's
-// position from viewpoint.
-//
-//==========================================================================
-
-static ETraceStatus TraceCallbackForDitherTransparency(FTraceResults& res, void* userdata)
-{
-	BitArray* CurMapSections = (BitArray*)userdata;
-	double bf, bc;
-
-	switch(res.HitType)
-	{
-	case TRACE_HitWall:
-		{
-			sector_t* linesec = res.Line->sidedef[res.Side]->sector;
-			if (linesec->subsectorcount > 0 && (*CurMapSections)[linesec->subsectors[0]->mapsection])
-			{
-				bf = res.Line->sidedef[res.Side]->sector->floorplane.ZatPoint(res.HitPos.XY());
-				bc = res.Line->sidedef[res.Side]->sector->ceilingplane.ZatPoint(res.HitPos.XY());
-				if (res.Line->sidedef[!res.Side])
-				{
-					// Two sided line! So let's find out if mid, top, or bottom texture needs dithered transparency
-					bf = max(bf, res.Line->sidedef[!res.Side]->sector->floorplane.ZatPoint(res.HitPos.XY()));
-					bc = min(bc, res.Line->sidedef[!res.Side]->sector->ceilingplane.ZatPoint(res.HitPos.XY()));
-					if (res.HitPos.Z <= bf) res.Line->sidedef[res.Side]->Flags |= WALLF_DITHERTRANS_BOTTOM;
-					else if (res.HitPos.Z < bc) res.Line->sidedef[res.Side]->Flags |= WALLF_DITHERTRANS_MID;
-					else res.Line->sidedef[res.Side]->Flags |= WALLF_DITHERTRANS_TOP;
-
-					res.Line->sidedef[res.Side]->dithertranscount = max<int>(1, res.Line->sidedef[!res.Side]->sector->e->XFloor.ffloors.Size());
-				}
-				else if ((res.HitPos.Z <= bc) && (res.HitPos.Z >= bf))
-				{
-					res.Line->sidedef[res.Side]->Flags |= WALLF_DITHERTRANS_MID;
-					res.Line->sidedef[res.Side]->dithertranscount = 1;
-				}
-			}
-		}
-		break;
-	case TRACE_HitFloor:
-		if (res.Sector->subsectorcount > 0 && (*CurMapSections)[res.Sector->subsectors[0]->mapsection] && res.HitVector.dot(res.Sector->floorplane.Normal()) < 0.0)
-		{
-			if (res.HitPos.Z == res.Sector->floorplane.ZatPoint(res.HitPos))
-			{
-				res.Sector->floorplane.dithertransflag = true;
-			}
-			else if (res.Sector->e->XFloor.ffloors.Size()) // Maybe it was 3D floors
-			{
-				F3DFloor *rover;
-				int kk;
-				for (kk = 0; kk < (int)res.Sector->e->XFloor.ffloors.Size(); kk++)
-				{
-					rover = res.Sector->e->XFloor.ffloors[kk];
-					if ((rover->flags&(FF_EXISTS | FF_RENDERPLANES | FF_THISINSIDE)) == (FF_EXISTS | FF_RENDERPLANES))
-					{
-						if (res.HitPos.Z == rover->top.plane->ZatPoint(res.HitPos))
-						{
-							rover->top.plane->dithertransflag = true;
-							break; // Out of for loop
-						}
-					}
-				}
-			}
-		}
-		break;
-	case TRACE_HitCeiling:
-		if (res.Sector->subsectorcount > 0 && (*CurMapSections)[res.Sector->subsectors[0]->mapsection] && res.HitVector.dot(res.Sector->ceilingplane.Normal()) < 0.0)
-		{
-			if (res.HitPos.Z == res.Sector->ceilingplane.ZatPoint(res.HitPos))
-			{
-				res.Sector->ceilingplane.dithertransflag = true;
-			}
-			else if (res.Sector->e->XFloor.ffloors.Size()) // Maybe it was 3D floors
-			{
-				F3DFloor *rover;
-				int kk;
-				for (kk = 0; kk < (int)res.Sector->e->XFloor.ffloors.Size(); kk++)
-				{
-					rover = res.Sector->e->XFloor.ffloors[kk];
-					if ((rover->flags&(FF_EXISTS | FF_RENDERPLANES | FF_THISINSIDE)) == (FF_EXISTS | FF_RENDERPLANES))
-					{
-						if (res.HitPos.Z == rover->bottom.plane->ZatPoint(res.HitPos))
-						{
-							rover->bottom.plane->dithertransflag = true;
-							break; // Out of for loop
-						}
-					}
-				}
-			}
-		}
-		break;
-	case TRACE_HitActor:
-	default:
-		break;
-	}
-
-	return TRACE_ContinueOutOfBounds;
-}
-
-
-void HWDrawInfo::SetDitherTransFlags(AActor* actor)
-{
-	// This should really be moved to a shader and have the GPU do some shape-tracing.
-	if (actor && actor->Sector)
-	{
-		FTraceResults results;
-		double horix = Viewpoint.Sin * actor->radius;
-		double horiy = Viewpoint.Cos * actor->radius;
-		DVector3 actorpos = actor->Pos();
-		DVector3 vvec = actorpos - Viewpoint.Pos;
-		if (Viewpoint.IsOrtho())
-		{
-			vvec = 5.0 * Viewpoint.camera->ViewPos->Offset.Length() * Viewpoint.ViewVector3D; // Should be 4.0? (since zNear is behind screen by 3*dist in VREyeInfo::GetProjection())
-		}
-		double distance = vvec.Length() - actor->radius;
-		DVector3 campos = actorpos - vvec;
-		sector_t* startsec;
-
-		vvec = vvec.Unit();
-		campos.X -= horix; campos.Y += horiy; campos.Z += actor->Height * 0.25;
-		for (int iter = 0; iter < 3; iter++)
-		{
-			startsec = Level->PointInRenderSubsector(campos)->sector;
-			Trace(campos, startsec, vvec, distance,
-				  0, 0, actor, results, TRACE_PortalRestrict, TraceCallbackForDitherTransparency, &CurrentMapSections);
-			campos.Z += actor->Height * 0.5;
-			Trace(campos, startsec, vvec, distance,
-				  0, 0, actor, results, TRACE_PortalRestrict, TraceCallbackForDitherTransparency, &CurrentMapSections);
-			campos.Z -= actor->Height * 0.5;
-			campos.X += horix; campos.Y -= horiy;
-		}
-
-		// Tracers don't work on 3D floors when you are starting in the same sector (standing under them, for example)
-		if (actor->Sector->e->XFloor.ffloors.Size()) // 3D floor
-		{
-			F3DFloor *rover;
-			for (int kk = 0; kk < (int)actor->Sector->e->XFloor.ffloors.Size(); kk++)
-			{
-				rover = actor->Sector->e->XFloor.ffloors[kk];
-				rover->top.plane->dithertransflag = true;
-				rover->bottom.plane->dithertransflag = true;
-			}
-		}
-	}
-}
-
 static ETraceStatus CheckForViewpointActor(FTraceResults& res, void* userdata)
 {
 	FRenderViewpoint* data = (FRenderViewpoint*)userdata;
@@ -1001,17 +803,13 @@ void HWDrawInfo::DrawScene(int drawmode)
 {
 	static int recursion = 0;
 	static int ssao_portals_available = 0;
-	auto& vp = Viewpoint;
+	const auto& vp = Viewpoint;
 
 	bool applySSAO = false;
 	if (drawmode == DM_MAINVIEW)
 	{
 		ssao_portals_available = gl_ssao_portals;
 		applySSAO = true;
-		if (r_dithertransparency && vp.IsAllowedOoB())
-		{
-			vp.camera->tracer ? SetDitherTransFlags(vp.camera->tracer) : SetDitherTransFlags(players[consoleplayer].mo);
-		}
 	}
 	else if (drawmode == DM_OFFSCREEN)
 	{
@@ -1068,8 +866,6 @@ void HWDrawInfo::ProcessScene(bool toscreen)
 	portalState.BeginScene();
 
 	int mapsection = Level->PointInRenderSubsector(Viewpoint.Pos)->mapsection;
-	if (Viewpoint.IsAllowedOoB() || Viewpoint.IsOrtho())
-		mapsection = Level->PointInRenderSubsector(Viewpoint.OffPos)->mapsection;
 	CurrentMapSections.Set(mapsection);
 	DrawScene(toscreen ? DM_MAINVIEW : DM_OFFSCREEN);
 
