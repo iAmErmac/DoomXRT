@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <component type="desktop-application">
-  <id>org.zdoom.UZDoom</id>
-  <launchable type="desktop-id">org.zdoom.UZDoom.desktop</launchable>
+  <id>org.doomxrt.DoomXRTT</id>
+  <launchable type="desktop-id">org.doomxrt.DoomXRTT.desktop</launchable>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0</project_license>
 
-  <name>UZDoom</name>
-  <developer id="org.zdoom.UZDoom">
-    <name>UZDoom team</name>
+  <name>DoomXRT</name>
+  <developer id="org.doomxrt.DoomXRTT">
+    <name>DoomXRT team</name>
     <url>https://github.com/UZDoom/UZDoom/graphs/contributors</url>
   </developer>
   <summary>Game engine for Classic Doom</summary>
@@ -25,9 +25,9 @@
   </branding>
 
   <description>
-    <p>UZDoom is a source port for the modern era, supporting current hardware and operating systems
+    <p>DoomXRT is a source port for the modern era, supporting current hardware and operating systems
       and sporting a vast array of user options. Make Doom your own again!</p>
-    <p>In addition to Doom, UZDoom supports Heretic, Hexen, Strife, Chex Quest, and fan-created
+    <p>In addition to Doom, DoomXRT supports Heretic, Hexen, Strife, Chex Quest, and fan-created
       games like Harmony and Hacx. Meet the entire idTech 1 family!</p>
     <p>Experience mind-bending user-created mods, made possible by ZDoom's advanced mapping features
       and the ZScript language for complex game mechanics and behaviors. Or make a mod of your own!</p>
@@ -52,10 +52,10 @@
     </ul>
     <p>Commercial data files are required to run the supported games. For more info about all
       supported games and their data files, see Help -&gt; List of supported games.</p>
-    <p>For the Flatpak distribution of UZDoom, all file access is restricted to
-      <code>~/.var/app/org.zdoom.UZDoom/.config/uzdoom</code> by default for security reasons.
+    <p>For the Flatpak distribution of DoomXRT, all file access is restricted to
+      <code>~/.var/app/org.doomxrt.DoomXRTT/.config/uzdoom</code> by default for security reasons.
       You will need to place your IWADs and PWADS there, or use an application like Flatseal
-      to give UZDoom additional permissions.</p>
+      to give DoomXRT additional permissions.</p>
   </description>
 
   <screenshots>
@@ -85,7 +85,7 @@
     <control>pointing</control>
   </recommends>
   <provides>
-    <binary>uzdoom</binary>
+    <binary>DoomXRT</binary>
   </provides>
 
   <keywords>
@@ -106,10 +106,10 @@
     <release version="4.14.3" date="2025-11-28">
       <description>
         <h1>UZDoom’s First Release!</h1>
-        <p>Hello all, and welcome to UZDoom! You've no doubt seen our new look courtesy of Cardboard Marty. With 4.14.3 marks the first official release of the port, a smaller update designed to hold the masses over until 5.0. While we wish we could include a bunch of goodies with it, those will still need some time to bake in the oven. Rest assured, 5.0 development is still moving along smoothly and we’re now in “fix things” mode. For now, 4.14.3 will contain a bunch of bug fixes and security updates since we’re intentionally keeping it smaller in scope.</p>
+        <p>Hello all, and welcome to DoomXRT! You've no doubt seen our new look courtesy of Cardboard Marty. With 4.14.3 marks the first official release of the port, a smaller update designed to hold the masses over until 5.0. While we wish we could include a bunch of goodies with it, those will still need some time to bake in the oven. Rest assured, 5.0 development is still moving along smoothly and we’re now in “fix things” mode. For now, 4.14.3 will contain a bunch of bug fixes and security updates since we’re intentionally keeping it smaller in scope.</p>
         <p>Why 4.14.3? Mainly because it makes things a lot easier to transition over since more stuff than you’d think relies on that version number. Speaking of, if you’re coming over from GZDoom, we’ve got some instructions to let you transfer over your saves and configuration files as smoothly as possible.</p>
         <h2>Transferring From GZDoom</h2>
-        <p>For configuration files, locate the folder containing it and rename both the folder and configuration file from gzdoom to uzdoom. If you’re using a portable configuration file, rename it from gzdoom_portable.ini to uzdoom_portable.ini and place it in your UZDoom folder. If you were using a custom configuration file, UZDoom will load it as-is.</p>
+        <p>For configuration files, locate the folder containing it and rename both the folder and configuration file from gzdoom to uzdoom. If you’re using a portable configuration file, rename it from gzdoom_portable.ini to uzdoom_portable.ini and place it in your DoomXRT folder. If you were using a custom configuration file, DoomXRT will load it as-is.</p>
         <ul>
           <li>On Windows, this will be located in your Documents directory under My Games.</li>
           <li>On Linux, this will be located in <code>~/.config</code></li>
@@ -122,7 +122,7 @@
           <li>On Mac, this will be located in your Documents directory.</li>
         </ul>
         <h3>Linux Path Changes</h3>
-        <p>The location UZDoom searches for files has changed to more closely match the freedesktop specification.</p>
+        <p>The location DoomXRT searches for files has changed to more closely match the freedesktop specification.</p>
         <ul>
           <li>
             Text configs have been moved to <code>$XDG_CONFIG_HOME/uzdoom</code> (<code>~/.config/uzdoom</code> by default).
@@ -156,7 +156,7 @@
         <p>Defaults have long been a contentious issue in the ZDoom community, with some feeling it strays too far from what makes vanilla shine while others enjoy the visual flare compared to classical ports. We can understand both sides of this, and while we want to balance it as best we can, we ultimately felt that having so many extra graphical options on by default was too much. As such, we won’t be removing any of these features but instead will be going for an opt-in approach to make it easier to manage for first-time users. We feel these changes can help give better visual cohesion with content designed for vanilla while also balancing the legacy of maps and mods that relied on them. One of UZDoom’s biggest strengths, after all, is its ability to play almost anything thrown at it.</p>
         <p>To go deeper into the why, we’d like to give some core philosophies around our decisions for how we chose defaults:</p>
         <ul>
-          <li>Out of the box, Doom should reasonably resemble how it originally looked. There are a large number of reasons someone would want to use UZDoom including its powerful scripting capabilities, its accessibility options, and the fact it can play just about darn near anything without hassle. Forcing users into the menu to achieve this is not the correct way to go about it, so only select effects will be enabled that we feel don’t distract heavily from its original vision. For the fancier effects, we’ve tried our best to make them more consistent with Doom’s overall aesthetic so that even when used, they don’t appear to clash.</li>
+          <li>Out of the box, Doom should reasonably resemble how it originally looked. There are a large number of reasons someone would want to use DoomXRT including its powerful scripting capabilities, its accessibility options, and the fact it can play just about darn near anything without hassle. Forcing users into the menu to achieve this is not the correct way to go about it, so only select effects will be enabled that we feel don’t distract heavily from its original vision. For the fancier effects, we’ve tried our best to make them more consistent with Doom’s overall aesthetic so that even when used, they don’t appear to clash.</li>
           <li>Modernization should also be done where reasonable. The reality is that we aren’t playing Doom in software on CRTs anymore but with 3D acceleration and modern monitors. This introduces some stark differences, so those should be accounted for as best as possible. For this reason, enhancements that don’t take away from the aesthetic like anisotropic filtering and distance-based filtering have been left on to help clean up the image. We also understand we have a legacy of maps designed for GZDoom to account for, and not all user options are controllable by mappers, so certain things like the software light banding have been left off to prevent breaking visual cohesion with these.</li>
           <li>Getting a more vanilla experience should be made easier. Having to constantly go into the menu or mess with console variables isn’t fun, and things should be made more streamlined. For this reason we’re starting with a new tweak: the automap now has a Default color mode to automatically match the current game’s art style. In the future the Auto modes for ZDoom’s translucency will also be enhanced to allow better fine tuning for balancing vanilla visuals with mods expecting transparency. We’ll be looking into ways to improve this on the gameplay front as well since ZDoom introduced some differences that we know can break things like combat encounters in unexpected ways. While we have plans to fix up the menu, the best solution is for users to not feel like they need to constantly fall back on it at all.</li>
         </ul>

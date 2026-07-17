@@ -2593,6 +2593,7 @@ OptionValue VRMode
 	5, "$OPTVAL_LEFTEYE"
 	6, "$OPTVAL_RIGHTEYE"
 	7, "$OPTVAL_QUADBUFFERED"
+	15, "OpenXR"
 }
 
 OptionValue ShadowMapQuality

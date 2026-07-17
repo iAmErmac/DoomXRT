@@ -4,11 +4,11 @@ version: 1
 
 AppDir:
   app_info:
-    id: org.zdoom.UZDoom
-    name: UZDoom
-    icon: org.zdoom.UZDoom
+    id: org.doomxrt.DoomXRTT
+    name: DoomXRT
+    icon: org.doomxrt.DoomXRTT
     version: '{{GIT_DESCRIBE}}'
-    exec: ./usr/bin/uzdoom
+    exec: ./usr/bin/DoomXRT
     exec_args: $@
 
   after_bundle: |
@@ -24,8 +24,8 @@ AppDir:
   after_runtime: |
     echo after_runtime
     # workaround for running on steamdeck
-    mv AppDir/usr/bin/uzdoom AppDir/usr/bin/uzdoom.bin
-    mv AppDir/usr/bin/uzdoom.sh AppDir/usr/bin/uzdoom
+    mv AppDir/usr/bin/DoomXRT AppDir/usr/bin/DoomXRT.bin
+    mv AppDir/usr/bin/DoomXRT.sh AppDir/usr/bin/DoomXRT
 
   runtime:
     path_mappings:

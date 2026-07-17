@@ -437,6 +437,12 @@ DFrameBuffer *SDLVideo::CreateFrameBuffer ()
 			builder.DebugLayer(vk_debug);
 			for (unsigned int i = 0; i < count; i++)
 				builder.RequireExtension(names[i]);
+			OpenXRBootstrapInfo xrInfo;
+			if (QueryOpenXRVulkanRequirementsForMode(vr_mode, xrInfo))
+			{
+				for (const auto& ext : xrInfo.requiredInstanceExtensions)
+					builder.RequireExtension(ext);
+			}
 			auto instance = builder.Create();
 
 			VkSurfaceKHR surfacehandle = nullptr;

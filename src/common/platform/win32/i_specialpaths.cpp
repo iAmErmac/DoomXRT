@@ -53,7 +53,7 @@
 #if HAVE_RT
 // HACKHACK: to not have a collision with existing config files
 #undef GAMENAMELOWERCASE
-#define GAMENAMELOWERCASE "gzdoom-rt2"
+#define GAMENAMELOWERCASE "doomxr"
 #endif
 
 

@@ -15,10 +15,14 @@
     #include "gl_sysfb.h"
 #endif
 #include "c_dispatch.h"
+#include "gamestate.h"
 #include "hw_renderstate.h"
 #include "g_levellocals.h"
+#include "menustate.h"
 #include "r_utility.h"
 #include "v_draw.h"
+#include "v_font.h"
+#include "version.h"
 #include "flatvertices.h"
 #include "hw_bonebuffer.h"
 #include "hw_lightbuffer.h"
@@ -2901,8 +2905,42 @@ IHardwareTexture* RTFrameBuffer::CreateHardwareTexture( int numchannels )
 {
     return new RTHardwareTexture{};
 }
+static void RT_DrawVersionString2D()
+{
+    if( twod == nullptr || NewConsoleFont == nullptr )
+    {
+        return;
+    }
+
+    const bool showOnThisState =
+        gamestate == GS_STARTUP || gamestate == GS_DEMOSCREEN || gamestate == GS_TITLELEVEL ||
+        menuactive != MENU_Off;
+    if( !showOnThisState )
+    {
+        return;
+    }
+
+    int textScale = active_con_scale( twod );
+    DrawText( twod,
+              NewConsoleFont,
+              CR_WHITE,
+              0,
+              0,
+              GetVersionString(),
+              DTA_VirtualWidth,
+              twod->GetWidth() / textScale,
+              DTA_VirtualHeight,
+              twod->GetHeight() / textScale,
+              DTA_KeepRatio,
+              true,
+              DTA_CleanNoMove,
+              true,
+              TAG_DONE );
+}
+
 void RTFrameBuffer::Draw2D()
 {
+    RT_DrawVersionString2D();
     ::Draw2D( twod, *m_state );
 }
 

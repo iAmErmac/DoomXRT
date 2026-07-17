@@ -321,6 +321,35 @@ add_custom_target( revision_check ALL
 # required libraries
 
 set( PROJECT_LIBRARIES ${PROJECT_LIBRARIES} miniz "${BZIP2_LIBRARIES}" "${CMAKE_DL_LIBS}" "${DRPC_LIBRARIES}")
+option( ENABLE_OPENXR "Enable OpenXR bootstrap support" OFF )
+if( ENABLE_OPENXR )
+	if( NOT HAVE_VULKAN )
+		message( FATAL_ERROR "ENABLE_OPENXR requires HAVE_VULKAN" )
+	endif()
+
+	find_path( OPENXR_INCLUDE_DIR
+		NAMES openxr/openxr.h
+		HINTS
+			${OPENXR_DIR}
+			ENV OPENXR_DIR
+			ENV PROGRAMFILES
+			ENV HOME
+			ENV USERPROFILE
+		PATH_SUFFIXES
+			openxr-sdk
+			openxr
+			Include
+			include
+	)
+
+	if( NOT OPENXR_INCLUDE_DIR )
+		message( FATAL_ERROR "Could not find OpenXR headers. Set OPENXR_DIR or install the OpenXR SDK." )
+	endif()
+
+	include_directories( SYSTEM "${OPENXR_INCLUDE_DIR}" )
+	add_definitions( -DHAVE_OPENXR -DDYN_OPENXR )
+endif()
+
 if (HAVE_VULKAN)
 	list( APPEND PROJECT_LIBRARIES "zvulkan" )
 endif()
@@ -761,6 +790,14 @@ set (VULKAN_SOURCES
 	common/rendering/vulkan/textures/vk_texture.cpp
 	common/rendering/vulkan/textures/vk_framebuffer.cpp
 )
+
+if( ENABLE_OPENXR )
+	list( APPEND VULKAN_SOURCES
+		common/rendering/stereo3d/openxr/oxr_loader.cpp
+		common/rendering/stereo3d/openxr/oxr_bootstrap.cpp
+	)
+endif()
+
 
 if (HAVE_GLES2)
 	set (GLES_SOURCES
@@ -1397,8 +1434,19 @@ add_dependencies( zdoom revision_check )
 if( NOT ZDOOM_OUTPUT_OLDSTYLE )
 	# RUNTIME_OUTPUT_DIRECTORY does not exist in CMake 2.4.
 	# Linux distributions are slow to adopt 2.6. :(
-	set_target_properties( zdoom PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${ZDOOM_OUTPUT_DIR} )
-	set_target_properties( zdoom PROPERTIES OUTPUT_NAME ${ZDOOM_EXE_NAME} )
+	set_target_properties( zdoom PROPERTIES
+		RUNTIME_OUTPUT_DIRECTORY ${ZDOOM_OUTPUT_DIR}
+		OUTPUT_NAME ${ZDOOM_EXE_NAME}
+		OUTPUT_NAME_DEBUG ${ZDOOM_EXE_NAME}
+		OUTPUT_NAME_RELEASE ${ZDOOM_EXE_NAME}
+		OUTPUT_NAME_MINSIZEREL ${ZDOOM_EXE_NAME}
+		OUTPUT_NAME_RELWITHDEBINFO ${ZDOOM_EXE_NAME}
+		RUNTIME_OUTPUT_NAME ${ZDOOM_EXE_NAME}
+		RUNTIME_OUTPUT_NAME_DEBUG ${ZDOOM_EXE_NAME}
+		RUNTIME_OUTPUT_NAME_RELEASE ${ZDOOM_EXE_NAME}
+		RUNTIME_OUTPUT_NAME_MINSIZEREL ${ZDOOM_EXE_NAME}
+		RUNTIME_OUTPUT_NAME_RELWITHDEBINFO ${ZDOOM_EXE_NAME}
+	)
 else()
 	set_target_properties( zdoom PROPERTIES
 		RUNTIME_OUTPUT_NAME ${ZDOOM_EXE_NAME}
@@ -1580,6 +1628,7 @@ source_group("Common\\Rendering\\Vulkan Renderer\\System" REGULAR_EXPRESSION "^$
 source_group("Common\\Rendering\\Vulkan Renderer\\Renderer" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/vulkan/renderer/.+")
 source_group("Common\\Rendering\\Vulkan Renderer\\Shaders" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/vulkan/shaders/.+")
 source_group("Common\\Rendering\\Vulkan Renderer\\Textures" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/vulkan/textures/.+")
+source_group("Common\\Rendering\\Stereo3D\\OpenXR" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/stereo3d/openxr/.+")
 source_group("Common\\Models" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/models/.+")
 source_group("Common\\Textures" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/textures/.+")
 source_group("Common\\Textures\\Hires" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/textures/hires/.+")

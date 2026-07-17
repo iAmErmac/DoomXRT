@@ -884,12 +884,56 @@ static void DrawRateStuff()
 	}
 }
 
+//==========================================================================
+//
+// DFrameBuffer :: DrawVersionString
+//
+// Draws the version string to the main screen
+//
+//==========================================================================
+
+static void DrawVersionString ()
+{
+	auto drawer = twod;
+	const bool showOnThisState = gamestate == GS_STARTUP || gamestate == GS_DEMOSCREEN || gamestate == GS_TITLELEVEL;
+	static gamestate_t lastVersionState = GS_FORCEWIPE;
+	static uint64_t first = 0;
+
+	if (!showOnThisState)
+	{
+		lastVersionState = GS_FORCEWIPE;
+		return;
+	}
+
+	if (lastVersionState != gamestate)
+	{
+		lastVersionState = gamestate;
+		first = screen->FrameTime;
+	}
+
+	// Only show version string for 5 seconds after entering the visible menu/startup state.
+	if ((screen->FrameTime - first) > 5000)
+	{
+		return;
+	}
+
+	char buff[60];
+	int textScale = active_con_scale(drawer);
+
+	mysnprintf(buff, countof(buff), "%s", GetVersionString());
+	DrawText(drawer, NewConsoleFont, CR_WHITE, 0, 0, (char *)&buff[0],
+		DTA_VirtualWidth, screen->GetWidth() / textScale,
+		DTA_VirtualHeight, screen->GetHeight() / textScale,
+		DTA_KeepRatio, true, TAG_DONE);
+}
+
 static void DrawOverlays()
 {
 	NetUpdate ();
 	C_DrawConsole ();
 	M_Drawer ();
 	DrawRateStuff();
+	DrawVersionString();
 	if (!hud_toggled)
 		FStat::PrintStat (twod);
 }

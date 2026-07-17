@@ -49,7 +49,7 @@ bool ValidRuntime(const fs::path& path)
 
 bool RuntimeCompatCurrent(const fs::path& path)
 {
-    fs::path manifest = path / ".gzdoom-rt-runtime";
+    fs::path manifest = path / ".doomxr-runtime";
     if (!Exists(manifest))
     {
         return true;
@@ -104,17 +104,21 @@ fs::path DefaultCacheRuntime()
 {
     if (const char* xdg = Env("XDG_CACHE_HOME"))
     {
-        return fs::path(xdg) / "gzdoom-rt" / "runtime" / "current";
+        return fs::path(xdg) / "doomxr" / "runtime" / "current";
     }
     if (const char* home = Env("HOME"))
     {
-        return fs::path(home) / ".cache" / "gzdoom-rt" / "runtime" / "current";
+        return fs::path(home) / ".cache" / "doomxr" / "runtime" / "current";
     }
     return fs::path("rt");
 }
 
 fs::path PreferredRuntimePath()
 {
+    if (const char* env = Env("DOOMXR_RT_RUNTIME_DIR"))
+    {
+        return ExpandUser(env);
+    }
     if (const char* env = Env("GZDOOM_RT_RUNTIME_DIR"))
     {
         return ExpandUser(env);
@@ -130,6 +134,10 @@ std::vector<fs::path> AssetCandidates()
 {
     std::vector<fs::path> result;
 
+    if (const char* env = Env("DOOMXR_RT_ASSET_DIR"))
+    {
+        result.push_back(ExpandUser(env));
+    }
     if (const char* env = Env("GZDOOM_RT_ASSET_DIR"))
     {
         result.push_back(ExpandUser(env));
@@ -138,8 +146,8 @@ std::vector<fs::path> AssetCandidates()
     {
         result.push_back(ExpandUser(static_cast<const char*>(rt_asset_dir)));
     }
-    result.push_back(ExpandUser("~/Games/gzdoom-rt/assets/gzdoom-rt-runtime/1.0.2/rt"));
-    result.push_back(ExpandUser("~/Games/gzdoom-rt/rt"));
+    result.push_back(ExpandUser("~/Games/doomxr/assets/doomxr-runtime/1.0.2/rt"));
+    result.push_back(ExpandUser("~/Games/doomxr/rt"));
     result.push_back("rt");
 
     return result;
@@ -178,6 +186,14 @@ std::string ShellQuote(const fs::path& path)
 
 fs::path FindPrepareScript()
 {
+    if (const char* env = Env("DOOMXR_RT_PREPARE_SCRIPT"))
+    {
+        fs::path path = ExpandUser(env);
+        if (Exists(path))
+        {
+            return path;
+        }
+    }
     if (const char* env = Env("GZDOOM_RT_PREPARE_SCRIPT"))
     {
         fs::path path = ExpandUser(env);
@@ -310,7 +326,7 @@ bool BasicPrepareRuntime(const fs::path& source, const fs::path& runtime)
     fs::copy(source / "data", runtime / "data",
              fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
 
-    std::ofstream manifest(runtime / ".gzdoom-rt-runtime");
+    std::ofstream manifest(runtime / ".doomxr-runtime");
     manifest << "source=" << source.string() << "\n";
     manifest << "compat=" << kCompatVersion << "\n";
     manifest << "prepared_by=engine-basic\n";
@@ -368,11 +384,11 @@ auto RT_ResolveRuntimePath() -> const char*
     if (g_runtimePath.empty())
     {
         g_runtimePath = WithTrailingSlash(PrepareOrFallback());
-        std::fprintf(stderr, "GZDoom RT runtime: %s (%s)\n", g_runtimePath.c_str(), g_runtimeSource.c_str());
+        std::fprintf(stderr, "DoomXR runtime: %s (%s)\n", g_runtimePath.c_str(), g_runtimeSource.c_str());
         if (g_runtimeSource == "asset-source-fallback" || g_runtimeSource == "local-rt-fallback")
         {
             std::fprintf(stderr,
-                         "GZDoom RT warning: using an unprepared RT asset source; generated compatibility "
+                         "DoomXR warning: using an unprepared RT asset source; generated compatibility "
                          "patches may be missing.\n");
         }
     }

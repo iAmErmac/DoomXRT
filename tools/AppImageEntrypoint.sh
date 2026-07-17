@@ -8,4 +8,5 @@ else
 	export LD_LIBRARY_PATH="$APPDIR/usr/lib/fallback:$LD_LIBRARY_PATH"
 fi
 
-exec "$APPDIR/usr/bin/uzdoom.bin" "$@"
+exec "$APPDIR/usr/bin/doomxr.bin" "$@"
+

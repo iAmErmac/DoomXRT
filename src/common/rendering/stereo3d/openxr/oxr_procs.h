@@ -1,0 +1,15 @@
+// Core OpenXR functions
+OXR_PROC(xrGetInstanceProcAddr)
+OXR_PROC(xrEnumerateInstanceExtensionProperties)
+OXR_PROC(xrCreateInstance)
+OXR_PROC(xrDestroyInstance)
+OXR_PROC(xrGetSystem)
+OXR_PROC(xrResultToString)
+
+// Vulkan bootstrap / query functions
+OXR_OPT_PROC(xrGetVulkanInstanceExtensionsKHR)
+OXR_OPT_PROC(xrGetVulkanDeviceExtensionsKHR)
+OXR_OPT_PROC(xrGetVulkanGraphicsRequirementsKHR)
+OXR_OPT_PROC(xrGetVulkanGraphicsRequirements2KHR)
+OXR_OPT_PROC(xrGetVulkanGraphicsDeviceKHR)
+OXR_OPT_PROC(xrGetVulkanGraphicsDevice2KHR)

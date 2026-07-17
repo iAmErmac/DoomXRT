@@ -58,6 +58,7 @@
 
 #ifdef HAVE_VULKAN
 #include "vulkan/system/vk_renderdevice.h"
+#include "common/rendering/stereo3d/openxr/oxr_loader.h"
 #endif
 
 #ifdef HAVE_VULKAN
@@ -441,8 +442,13 @@ public:
 				builder.RequireExtension(VK_KHR_SURFACE_EXTENSION_NAME); // KHR_surface, required
 				builder.OptionalExtension(VK_EXT_METAL_SURFACE_EXTENSION_NAME); // EXT_metal_surface, optional, preferred
 				builder.OptionalExtension(VK_MVK_MACOS_SURFACE_EXTENSION_NAME); // MVK_macos_surface, optional, deprecated
-				auto vulkanInstance = builder.Create();
-
+					OpenXRBootstrapInfo xrInfo;
+					if (QueryOpenXRVulkanRequirementsForMode(vr_mode, xrInfo))
+					{
+						for (const auto& ext : xrInfo.requiredInstanceExtensions)
+							builder.RequireExtension(ext);
+					}
+					auto vulkanInstance = builder.Create();
 				VkSurfaceKHR surfacehandle = nullptr;
 				if (!I_CreateVulkanSurface(vulkanInstance->Instance, &surfacehandle))
 					VulkanError("I_CreateVulkanSurface failed");

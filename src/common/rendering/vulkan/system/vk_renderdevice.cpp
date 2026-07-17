@@ -64,6 +64,7 @@
 #include "vulkan/system/vk_commandbuffer.h"
 #include "vulkan/system/vk_buffer.h"
 #include "engineerrors.h"
+#include "common/rendering/stereo3d/openxr/oxr_loader.h"
 #include "c_dispatch.h"
 
 FString JitCaptureStackTrace(int framesToSkip, bool includeNativeFrames, int maxFrames = -1);
@@ -128,6 +129,26 @@ VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, std::sha
 	builder.OptionalRayQuery();
 	builder.Surface(surface);
 	builder.SelectDevice(vk_device);
+#if defined(HAVE_OPENXR)
+	if (vr_mode == VR_OPENXR)
+	{
+		OpenXRBootstrapInfo xrInfo;
+		if (QueryOpenXRVulkanRequirementsForMode(vr_mode, xrInfo))
+		{
+			for (const auto& ext : xrInfo.requiredDeviceExtensions)
+				builder.RequireExtension(ext);
+
+			VkPhysicalDevice preferredDevice = VK_NULL_HANDLE;
+			if (surface != nullptr && surface->Instance != nullptr && QueryRuntimePreferredPhysicalDevice(surface->Instance->Instance, preferredDevice))
+			{
+				VkPhysicalDeviceProperties preferredProps{};
+				vkGetPhysicalDeviceProperties(preferredDevice, &preferredProps);
+				Printf("OpenXR bootstrap: preferred Vulkan physical device: %s\n", preferredProps.deviceName);
+				builder.PreferredPhysicalDevice(preferredDevice);
+			}
+		}
+	}
+#endif
 	SupportedDevices = builder.FindDevices(surface->Instance);
 	device = builder.Create(surface->Instance);
 }

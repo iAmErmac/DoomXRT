@@ -1,9 +1,10 @@
 #pragma once
 
+#include <string>
 #include <zwidget/core/widget.h>
 
+class Canvas;
 class ImageBox;
-class TextLabel;
 
 class LauncherBanner : public Widget
 {
@@ -15,7 +16,8 @@ public:
 
 private:
 	void OnGeometryChanged() override;
+	void OnPaint(Canvas* canvas) override;
 
 	ImageBox* Logo = nullptr;
-	TextLabel* VersionLabel = nullptr;
+	std::string VersionText;
 };
