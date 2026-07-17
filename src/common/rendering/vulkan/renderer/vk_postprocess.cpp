@@ -259,7 +259,7 @@ void VkPostprocess::BlurScene(float gameinfobluramount)
 
 	VkPPRenderState renderstate(fb);
 
-	auto vrmode = VRMode::GetVRMode(true);
+	auto vrmode = VRMode::GetVRModeCached(true);
 	int eyeCount = vrmode->mEyeCount;
 	for (int i = 0; i < eyeCount; ++i)
 	{

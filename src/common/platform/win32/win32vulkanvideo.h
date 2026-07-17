@@ -14,6 +14,7 @@ bool I_GetVulkanPlatformExtensions(unsigned int* count, const char** names);
 EXTERN_CVAR(Bool, vid_fullscreen)
 EXTERN_CVAR(Bool, vk_debug)
 EXTERN_CVAR(Int, vk_device)
+EXTERN_CVAR(Int, vr_mode)
 
 //==========================================================================
 //
@@ -38,7 +39,8 @@ public:
 			builder.RequireExtension(names[i]);
 #if defined(HAVE_OPENXR)
 		OpenXRBootstrapInfo xrInfo;
-		if (QueryOpenXRVulkanRequirementsForMode(vr_mode, xrInfo))
+		int requestedVrMode = *vr_mode;
+		if (QueryOpenXRVulkanRequirementsForMode(requestedVrMode, xrInfo))
 		{
 			for (const auto& ext : xrInfo.requiredInstanceExtensions)
 				builder.RequireExtension(ext);

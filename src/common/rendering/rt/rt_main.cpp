@@ -2921,6 +2921,7 @@ static void RT_DrawVersionString2D()
     }
 
     int textScale = active_con_scale( twod );
+    constexpr int rtVersionScaleDivider = 8;
     DrawText( twod,
               NewConsoleFont,
               CR_WHITE,
@@ -2928,9 +2929,9 @@ static void RT_DrawVersionString2D()
               0,
               GetVersionString(),
               DTA_VirtualWidth,
-              twod->GetWidth() / textScale,
+              ( twod->GetWidth() / textScale ) * rtVersionScaleDivider,
               DTA_VirtualHeight,
-              twod->GetHeight() / textScale,
+              ( twod->GetHeight() / textScale ) * rtVersionScaleDivider,
               DTA_KeepRatio,
               true,
               DTA_CleanNoMove,
@@ -2940,7 +2941,6 @@ static void RT_DrawVersionString2D()
 
 void RTFrameBuffer::Draw2D()
 {
-    RT_DrawVersionString2D();
     ::Draw2D( twod, *m_state );
 }
 

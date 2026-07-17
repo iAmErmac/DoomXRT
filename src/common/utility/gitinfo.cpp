@@ -54,12 +54,28 @@ const char *GetGitTime()
 
 const char *GetVersionString()
 {
-	if (GetGitDescription()[0] == '\0')
+	const char* description = GetGitDescription();
+	if (description[0] == '\0')
 	{
 		return VERSIONSTR;
 	}
-	else
+
+	if (description[0] == 'g')
 	{
-		return GIT_DESCRIPTION;
+		const char* numeric = description + 1;
+		const char* suffix = numeric;
+		while ((*suffix >= '0' && *suffix <= '9') || *suffix == '.')
+		{
+			suffix++;
+		}
+
+		if (suffix != numeric && (*suffix == '-' || *suffix == '\0'))
+		{
+			static char versionString[128];
+			snprintf(versionString, sizeof(versionString), "g%s%s", VERSIONSTR, suffix);
+			return versionString;
+		}
 	}
+
+	return description;
 }

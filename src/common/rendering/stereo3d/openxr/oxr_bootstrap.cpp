@@ -1,6 +1,8 @@
 #include "oxr_loader.h"
 #include "oxr_internal.h"
 #include "common/engine/printf.h"
+#include "version.h"
+#include "hw_vrmodes.h"
 #include <algorithm>
 #include <cstring>
 #include <string>

@@ -66,9 +66,10 @@ static void DrawMenuVersionString()
 	}
 
 	int textScale = active_con_scale(twod);
+	constexpr int menuVersionScaleDivider = 40;
 	DrawText(twod, NewConsoleFont, CR_WHITE, 0, 0, GetVersionString(),
-		DTA_VirtualWidth, twod->GetWidth() / textScale,
-		DTA_VirtualHeight, twod->GetHeight() / textScale,
+		DTA_VirtualWidth, (twod->GetWidth() / textScale) * menuVersionScaleDivider,
+		DTA_VirtualHeight, (twod->GetHeight() / textScale) * menuVersionScaleDivider,
 		DTA_KeepRatio, true,
 		DTA_CleanNoMove, true,
 		TAG_DONE);
@@ -920,7 +921,9 @@ void M_Drawer (void)
 		if (!going)
 		{
 			CurrentMenu->CallDrawer();
+#if !HAVE_RT
 			DrawMenuVersionString();
+#endif
 		}
 	}
 }

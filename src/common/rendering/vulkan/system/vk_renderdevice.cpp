@@ -72,6 +72,7 @@ FString JitCaptureStackTrace(int framesToSkip, bool includeNativeFrames, int max
 EXTERN_CVAR(Int, gl_tonemap)
 EXTERN_CVAR(Int, screenblocks)
 EXTERN_CVAR(Bool, cl_capfps)
+EXTERN_CVAR(Int, vr_mode)
 
 CVAR(Bool, vk_raytrace, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
@@ -133,7 +134,8 @@ VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, std::sha
 	if (vr_mode == VR_OPENXR)
 	{
 		OpenXRBootstrapInfo xrInfo;
-		if (QueryOpenXRVulkanRequirementsForMode(vr_mode, xrInfo))
+		int requestedVrMode = *vr_mode;
+		if (QueryOpenXRVulkanRequirementsForMode(requestedVrMode, xrInfo))
 		{
 			for (const auto& ext : xrInfo.requiredDeviceExtensions)
 				builder.RequireExtension(ext);
@@ -144,7 +146,6 @@ VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, std::sha
 				VkPhysicalDeviceProperties preferredProps{};
 				vkGetPhysicalDeviceProperties(preferredDevice, &preferredProps);
 				Printf("OpenXR bootstrap: preferred Vulkan physical device: %s\n", preferredProps.deviceName);
-				builder.PreferredPhysicalDevice(preferredDevice);
 			}
 		}
 	}

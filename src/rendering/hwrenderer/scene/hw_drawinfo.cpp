@@ -667,7 +667,7 @@ void HWDrawInfo::DrawCoronas(FRenderState& state)
 
 	HWViewpointUniforms vp = VPUniforms;
 	vp.mViewMatrix.loadIdentity();
-	vp.mProjectionMatrix = VRMode::GetVRMode(true)->GetHUDSpriteProjection();
+	vp.mProjectionMatrix = VRMode::GetVRModeCached(true)->GetHUDProjection();
 	screen->mViewpoints->SetViewpoint(state, &vp);
 
 	float timeElapsed = (screen->FrameTime - LastFrameTime) / 1000.0f;
@@ -747,11 +747,11 @@ void HWDrawInfo::EndDrawScene(sector_t * viewsector, FRenderState &state)
 void HWDrawInfo::DrawEndScene2D(sector_t * viewsector, FRenderState &state)
 {
 	const bool renderHUDModel = IsHUDModelForPlayerAvailable(players[consoleplayer].camera->player);
-	auto vrmode = VRMode::GetVRMode(true);
+	auto vrmode = VRMode::GetVRModeCached(true);
 
 	HWViewpointUniforms vp = VPUniforms;
 	vp.mViewMatrix.loadIdentity();
-	vp.mProjectionMatrix = vrmode->GetHUDSpriteProjection();
+	vp.mProjectionMatrix = vrmode->GetHUDProjection();
 	screen->mViewpoints->SetViewpoint(state, &vp);
 	state.EnableDepthTest(false);
 	state.EnableMultisampling(false);

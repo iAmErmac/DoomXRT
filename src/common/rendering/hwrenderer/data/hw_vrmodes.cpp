@@ -56,88 +56,67 @@ CVAR(Float, vr_screendist, 0.80f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG) // METERS
 // default conversion between (vertical) DOOM units and meters
 CVAR(Float, vr_hunits_per_meter, 41.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG) // METERS
 
-
+namespace
+{
 #define isqrt2 0.7071067812f
-static VRMode vrmi_mono = { 1, 1.f, 1.f, 1.f,{ { 0.f, 1.f },{ 0.f, 0.f } } };
-static VRMode vrmi_stereo = { 2, 1.f, 1.f, 1.f,{ { -.5f, 1.f },{ .5f, 1.f } } };
-static VRMode vrmi_sbsfull = { 2, .5f, 1.f, 2.f,{ { -.5f, .5f },{ .5f, .5f } } };
-static VRMode vrmi_sbssquished = { 2, .5f, 1.f, 1.f,{ { -.5f, 1.f },{ .5f, 1.f } } };
-static VRMode vrmi_lefteye = { 1, 1.f, 1.f, 1.f, { { -.5f, 1.f },{ 0.f, 0.f } } };
-static VRMode vrmi_righteye = { 1, 1.f, 1.f, 1.f,{ { .5f, 1.f },{ 0.f, 0.f } } };
-static VRMode vrmi_topbottom = { 2, 1.f, .5f, 1.f,{ { -.5f, 1.f },{ .5f, 1.f } } };
-static VRMode vrmi_checker = { 2, isqrt2, isqrt2, 1.f,{ { -.5f, 1.f },{ .5f, 1.f } } };
 
-static float DEG2RAD(float deg)
-{
-	return deg * float(M_PI / 180.0);
-}
+	static const VREyeInfo vrmi_mono_eyes[2] = { VREyeInfo(0.f, 1.f), VREyeInfo(0.f, 0.f) };
+	static const VREyeInfo vrmi_stereo_eyes[2] = { VREyeInfo(-.5f, 1.f), VREyeInfo(.5f, 1.f) };
+	static const VREyeInfo vrmi_sbsfull_eyes[2] = { VREyeInfo(-.5f, .5f), VREyeInfo(.5f, .5f) };
+	static const VREyeInfo vrmi_sbssquished_eyes[2] = { VREyeInfo(-.5f, 1.f), VREyeInfo(.5f, 1.f) };
+	static const VREyeInfo vrmi_lefteye_eyes[2] = { VREyeInfo(-.5f, 1.f), VREyeInfo(0.f, 0.f) };
+	static const VREyeInfo vrmi_righteye_eyes[2] = { VREyeInfo(.5f, 1.f), VREyeInfo(0.f, 0.f) };
+	static const VREyeInfo vrmi_topbottom_eyes[2] = { VREyeInfo(-.5f, 1.f), VREyeInfo(.5f, 1.f) };
+	static const VREyeInfo vrmi_checker_eyes[2] = { VREyeInfo(-.5f, 1.f), VREyeInfo(.5f, 1.f) };
+	static const VREyeInfo vrmi_openxr_eyes[2] = { VREyeInfo(0.f, 1.f), VREyeInfo(0.f, 0.f) };
 
-static float RAD2DEG(float rad)
-{
-	return rad * float(180. / M_PI);
-}
-
-const VRMode *VRMode::GetVRMode(bool toscreen)
-{
-	int mode = !toscreen || (sysCallbacks.DisableTextureFilter && sysCallbacks.DisableTextureFilter()) ? 0 : vr_mode;
-
-	switch (mode)
+	class DoomXRMode final : public VRMode
 	{
-	default:
-	case VR_MONO:
-		return &vrmi_mono;
+	public:
+		DoomXRMode() : VRMode(1, 1.f, 1.f, 1.f, vrmi_openxr_eyes) {}
 
-	case VR_GREENMAGENTA:
-	case VR_REDCYAN:
-	case VR_QUADSTEREO:
-	case VR_AMBERBLUE:
-	case VR_SIDEBYSIDELETTERBOX:
-		return &vrmi_stereo;
+		bool IsVR() const override { return true; }
+		bool GetRecommendedRenderSize(int& outWidth, int& outHeight) const override { outWidth = 0; outHeight = 0; return false; }
+		bool ShouldUseRecommendedRenderSizeThisFrame() const override { return false; }
+		bool SupportsMultiview() const override { return false; }
+		bool ShouldUseMultiviewThisFrame() const override { return false; }
+		bool ShouldUseScreenLayerForCurrentFrame() const override { return false; }
+		void SetupOverlay() override {}
+		void UpdateOverlaySettings() const override {}
+		void DrawMountedHud(HWDrawInfo*, FRenderState&) const override {}
+		bool IsRenderingVirtualScreen() const override { return false; }
+		bool RenderVirtualScreen() const override { return false; }
+		void FinalizeEyeImage(VulkanRenderDevice*, int) const override {}
+		void PollXREvents() const override {}
+		bool BeginXRFrame() const override { return false; }
+		bool AcquireXRSwapchain() const override { return false; }
+		bool SubmitFrame() const override { return false; }
+		bool GetHandTransform(int, VSMatrix*) const override { return false; }
+		bool GetWeaponTransform(VSMatrix* out, int hand = VR_MAINHAND) const override { return VRMode::GetWeaponTransform(out, hand); }
+		bool RenderPlayerSpritesInScene() const override { return false; }
+		bool GetTeleportLocation(DVector3&) const override { return false; }
+		bool IsInitialized() const override { return true; }
+		bool RenderDesktopMirror(VulkanRenderDevice*, VulkanImage*) const override { return false; }
+		void Present() const override {}
+	};
 
-	case VR_SIDEBYSIDESQUISHED:
-	case VR_COLUMNINTERLEAVED:
-		return &vrmi_sbssquished;
+	static DoomXRMode vrmi_openxr;
 
-	case VR_SIDEBYSIDEFULL:
-		return &vrmi_sbsfull;
+	static float DEG2RAD(float deg)
+	{
+		return deg * float(M_PI / 180.0);
+	}
 
-	case VR_TOPBOTTOM:
-	case VR_ROWINTERLEAVED:
-		return &vrmi_topbottom;
-
-	case VR_LEFTEYEVIEW:
-		return &vrmi_lefteye;
-
-	case VR_RIGHTEYEVIEW:
-		return &vrmi_righteye;
-
-	case VR_CHECKERINTERLEAVED:
-		return &vrmi_checker;
+	static float RAD2DEG(float rad)
+	{
+		return rad * float(180. / M_PI);
 	}
 }
 
-void VRMode::AdjustViewport(DFrameBuffer *screen) const
+VREyeInfo::VREyeInfo(float shiftFactor, float scaleFactor)
 {
-	screen->mSceneViewport.height = (int)(screen->mSceneViewport.height * mVerticalViewportScale);
-	screen->mSceneViewport.top = (int)(screen->mSceneViewport.top * mVerticalViewportScale);
-	screen->mSceneViewport.width = (int)(screen->mSceneViewport.width * mHorizontalViewportScale);
-	screen->mSceneViewport.left = (int)(screen->mSceneViewport.left * mHorizontalViewportScale);
-
-	screen->mScreenViewport.height = (int)(screen->mScreenViewport.height * mVerticalViewportScale);
-	screen->mScreenViewport.top = (int)(screen->mScreenViewport.top * mVerticalViewportScale);
-	screen->mScreenViewport.width = (int)(screen->mScreenViewport.width * mHorizontalViewportScale);
-	screen->mScreenViewport.left = (int)(screen->mScreenViewport.left * mHorizontalViewportScale);
-}
-
-VSMatrix VRMode::GetHUDSpriteProjection() const
-{
-	VSMatrix mat;
-	int w = screen->GetWidth();
-	int h = screen->GetHeight();
-	float scaled_w = w / mWeaponProjectionScale;
-	float left_ofs = (w - scaled_w) / 2.f;
-	mat.ortho(left_ofs, left_ofs + scaled_w, (float)h, 0, -1.0f, 1.0f);
-	return mat;
+	mShiftFactor = shiftFactor;
+	mScaleFactor = scaleFactor;
 }
 
 float VREyeInfo::getShift() const
@@ -152,7 +131,7 @@ VSMatrix VREyeInfo::GetProjection(float fov, float aspectRatio, float fovRatio, 
 
 	if (iso_ortho) // Orthographic projection for isometric viewpoint
 	{
-		double zNear = -3.0/fovRatio; // screen->GetZNear();
+		double zNear = -3.0 / fovRatio; // screen->GetZNear();
 		double zFar = screen->GetZFar();
 
 		double fH = tan(DEG2RAD(fov) / 2) / fovRatio;
@@ -181,7 +160,6 @@ VSMatrix VREyeInfo::GetProjection(float fov, float aspectRatio, float fovRatio, 
 		// Q: shouldn't shift vary with roll angle, at least for desktop display?
 		// A: No. (lab) roll is not measured on desktop display (yet)
 		double frustumShift = zNear * getShift() / vr_screendist; // meters cancel, leaving doom units
-																  // double frustumShift = 0; // Turning off shift for debugging
 		double fH = zNear * tan(DEG2RAD(fov) / 2) / fovRatio;
 		double fW = fH * aspectRatio * mScaleFactor;
 		double left = -fW - frustumShift;
@@ -195,7 +173,14 @@ VSMatrix VREyeInfo::GetProjection(float fov, float aspectRatio, float fovRatio, 
 	}
 }
 
-
+VSMatrix VREyeInfo::GetHUDProjection() const
+{
+	VSMatrix mat;
+	int w = screen->GetWidth();
+	int h = screen->GetHeight();
+	mat.ortho(0.f, (float)w, (float)h, 0.f, -1.0f, 1.0f);
+	return mat;
+}
 
 /* virtual */
 DVector3 VREyeInfo::GetViewShift(float yaw) const
@@ -203,7 +188,7 @@ DVector3 VREyeInfo::GetViewShift(float yaw) const
 	if (mShiftFactor == 0)
 	{
 		// pass-through for Mono view
-		return { 0,0,0 };
+		return { 0, 0, 0 };
 	}
 	else
 	{
@@ -213,3 +198,160 @@ DVector3 VREyeInfo::GetViewShift(float yaw) const
 	}
 }
 
+VRMode::VRMode(int eyeCount, float horizontalViewportScale, float verticalViewportScale,
+	float weaponProjectionScale, const VREyeInfo* eyes)
+{
+	mEyeCount = eyeCount;
+	mHorizontalViewportScale = horizontalViewportScale;
+	mVerticalViewportScale = verticalViewportScale;
+	mWeaponProjectionScale = weaponProjectionScale;
+
+	if (eyes != nullptr)
+	{
+		mEyes[0] = eyes[0];
+		mEyes[1] = eyes[1];
+	}
+	else
+	{
+		mEyes[0] = VREyeInfo(0.f, 1.f);
+		mEyes[1] = VREyeInfo(0.f, 0.f);
+	}
+}
+
+const VRMode *VRMode::GetVRMode(bool toscreen)
+{
+	static VRMode vrmi_mono_mode(1, 1.f, 1.f, 1.f, vrmi_mono_eyes);
+	static VRMode vrmi_stereo_mode(2, 1.f, 1.f, 1.f, vrmi_stereo_eyes);
+	static VRMode vrmi_sbsfull_mode(2, .5f, 1.f, 2.f, vrmi_sbsfull_eyes);
+	static VRMode vrmi_sbssquished_mode(2, .5f, 1.f, 1.f, vrmi_sbssquished_eyes);
+	static VRMode vrmi_lefteye_mode(1, 1.f, 1.f, 1.f, vrmi_lefteye_eyes);
+	static VRMode vrmi_righteye_mode(1, 1.f, 1.f, 1.f, vrmi_righteye_eyes);
+	static VRMode vrmi_topbottom_mode(2, 1.f, .5f, 1.f, vrmi_topbottom_eyes);
+	static VRMode vrmi_checker_mode(2, isqrt2, isqrt2, 1.f, vrmi_checker_eyes);
+
+	int mode = !toscreen || (sysCallbacks.DisableTextureFilter && sysCallbacks.DisableTextureFilter()) ? 0 : vr_mode;
+
+	switch (mode)
+	{
+	default:
+	case VR_MONO:
+		return &vrmi_mono_mode;
+
+	case VR_GREENMAGENTA:
+	case VR_REDCYAN:
+	case VR_QUADSTEREO:
+	case VR_AMBERBLUE:
+	case VR_SIDEBYSIDELETTERBOX:
+		return &vrmi_stereo_mode;
+
+	case VR_SIDEBYSIDESQUISHED:
+	case VR_COLUMNINTERLEAVED:
+		return &vrmi_sbssquished_mode;
+
+	case VR_SIDEBYSIDEFULL:
+		return &vrmi_sbsfull_mode;
+
+	case VR_TOPBOTTOM:
+	case VR_ROWINTERLEAVED:
+		return &vrmi_topbottom_mode;
+
+	case VR_LEFTEYEVIEW:
+		return &vrmi_lefteye_mode;
+
+	case VR_RIGHTEYEVIEW:
+		return &vrmi_righteye_mode;
+
+	case VR_CHECKERINTERLEAVED:
+		return &vrmi_checker_mode;
+
+	case VR_OPENXR:
+		return &vrmi_openxr;
+	}
+}
+
+const VRMode *VRMode::GetVRModeCached(bool toscreen)
+{
+	extern thread_local bool isWorkerThread;
+	if (isWorkerThread)
+	{
+		static VRMode safeMono(1, 1.f, 1.f, 1.f, vrmi_mono_eyes);
+		return &safeMono;
+	}
+
+	struct CacheEntry
+	{
+		bool valid = false;
+		uint64_t frameTime = 0;
+		int vrMode = 0;
+		int backend = 0;
+		bool disableTextureFilter = false;
+		const VRMode* mode = nullptr;
+	};
+
+	thread_local CacheEntry cache[2];
+	auto& entry = cache[toscreen ? 1 : 0];
+	const uint64_t frameTime = screen != nullptr ? screen->FrameTime : 0;
+	const int currentVrMode = (int)vr_mode;
+	const int currentBackend = V_GetBackend();
+	const bool currentDisableTextureFilter = sysCallbacks.DisableTextureFilter && sysCallbacks.DisableTextureFilter();
+
+	if (entry.valid &&
+		entry.frameTime == frameTime &&
+		entry.vrMode == currentVrMode &&
+		entry.backend == currentBackend &&
+		entry.disableTextureFilter == currentDisableTextureFilter)
+	{
+		return entry.mode;
+	}
+
+	entry.valid = true;
+	entry.frameTime = frameTime;
+	entry.vrMode = currentVrMode;
+	entry.backend = currentBackend;
+	entry.disableTextureFilter = currentDisableTextureFilter;
+	entry.mode = GetVRMode(toscreen);
+	return entry.mode;
+}
+
+void VRMode::AdjustViewport(DFrameBuffer *screen) const
+{
+	screen->mSceneViewport.height = (int)(screen->mSceneViewport.height * mVerticalViewportScale);
+	screen->mSceneViewport.top = (int)(screen->mSceneViewport.top * mVerticalViewportScale);
+	screen->mSceneViewport.width = (int)(screen->mSceneViewport.width * mHorizontalViewportScale);
+	screen->mSceneViewport.left = (int)(screen->mSceneViewport.left * mHorizontalViewportScale);
+
+	screen->mScreenViewport.height = (int)(screen->mScreenViewport.height * mVerticalViewportScale);
+	screen->mScreenViewport.top = (int)(screen->mScreenViewport.top * mVerticalViewportScale);
+	screen->mScreenViewport.width = (int)(screen->mScreenViewport.width * mHorizontalViewportScale);
+	screen->mScreenViewport.left = (int)(screen->mScreenViewport.left * mHorizontalViewportScale);
+}
+
+VSMatrix VRMode::GetHUDSpriteProjection() const
+{
+	VSMatrix mat;
+	int w = screen->GetWidth();
+	int h = screen->GetHeight();
+	float scaled_w = w / mWeaponProjectionScale;
+	float left_ofs = (w - scaled_w) / 2.f;
+	mat.ortho(left_ofs, left_ofs + scaled_w, (float)h, 0, -1.0f, 1.0f);
+	return mat;
+}
+
+VSMatrix VRMode::GetHUDProjection() const
+{
+	return GetHUDSpriteProjection();
+}
+
+void VRMode::Present() const
+{
+}
+
+bool VRMode::GetWeaponTransform(VSMatrix* out, int hand) const
+{
+	if (out == nullptr)
+	{
+		return false;
+	}
+
+	return GetHandTransform(hand, out);
+}
