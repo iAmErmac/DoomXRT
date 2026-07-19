@@ -98,6 +98,7 @@
 #include <span>
 
 #include "rt/rt_cvars.h"
+#include "rt/rt_helpers.h"
 #include "rt/defer.h"
 #endif
 #include "launcherwindow.h"
@@ -1530,7 +1531,9 @@ static void AskUserToChoose(std::stop_token stopToken, std::promise<ChooseResult
 
 	static auto loadimg2 = []( const char* path ) -> img_t {
 		int  x, y, channels;
-		auto img = stbi_load( path, &x, &y, &channels, 4 );
+		const char* resolved_path =
+			(path && strncmp(path, "rt/", 3) == 0) ? RT_ResolveRuntimeSubpath(path + 3) : path;
+		auto img = stbi_load( resolved_path, &x, &y, &channels, 4 );
 		if( !img || x <= 0 || y <= 0 )
 		{
 			return {};
@@ -1935,12 +1938,16 @@ int I_PickIWad(WadStuff *wads, int numwads, bool showwin, int defaultiwad, int& 
         }
     }
 
+    const char* requestedIwad = Args->CheckValue("-iwad");
+    const FString requestedIwadBase = requestedIwad ? ExtractFileBase(requestedIwad) : FString{};
+
     auto res = ChooseResult::Fallback;
 	if (Args->CheckParm("-rtdoom1") > 0)
 	{
 		res = ChooseResult::UltimateDoom;
 	}
-	else if (Args->CheckParm("-rtdoom2") > 0)
+	else if (Args->CheckParm("-rtdoom2") > 0 ||
+             requestedIwadBase.CompareNoCase("doom2") == 0)
 	{
 		res = ChooseResult::Doom2;
 	}

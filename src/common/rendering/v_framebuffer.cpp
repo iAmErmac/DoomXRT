@@ -50,6 +50,7 @@
 #include "flatvertices.h"
 #include "version.h"
 #include "hw_material.h"
+#include "hw_vrmodes.h"
 
 #include <chrono>
 #include <thread>
@@ -218,9 +219,26 @@ void DFrameBuffer::SetViewportRects(IntRect *bounds)
 		mSceneViewport.width = (int)round(mSceneViewport.width * scaleX);
 		mSceneViewport.height = (int)round(mSceneViewport.height * scaleY);
 	}
-
 	mGameScreenWidth = GetWidth();
 	mGameScreenHeight = GetHeight();
+
+	const auto vrmode = VRMode::GetVRModeCached(true);
+	if (vrmode != nullptr && vrmode->ShouldUseRecommendedRenderSizeThisFrame())
+	{
+		int recommendedWidth = 0;
+		int recommendedHeight = 0;
+		if (vrmode->GetRecommendedRenderSize(recommendedWidth, recommendedHeight) && recommendedWidth > 0 && recommendedHeight > 0)
+		{
+			mScreenViewport.left = 0;
+			mScreenViewport.top = 0;
+			mScreenViewport.width = recommendedWidth;
+			mScreenViewport.height = recommendedHeight;
+			if (sysCallbacks.GetSceneRect)
+				mSceneViewport = sysCallbacks.GetSceneRect();
+			else
+				mSceneViewport = mScreenViewport;
+		}
+	}
 }
 
 //===========================================================================

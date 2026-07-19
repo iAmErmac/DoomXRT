@@ -317,6 +317,9 @@ void V_Init2 ();
 
 void V_Shutdown ();
 int V_GetBackend();
+void V_ResolveStartupRendererIntent();
+bool V_IsOpenXRResolvedForStartup();
+bool V_FallbackOpenXRStartup(const char* failureStage, const char* reason);
 
 inline bool IsRatioWidescreen(int ratio) { return (ratio & 3) != 0; }
 extern bool setsizeneeded, setmodeneeded;

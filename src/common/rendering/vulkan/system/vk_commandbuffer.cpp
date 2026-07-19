@@ -29,6 +29,7 @@
 #include "vulkan/renderer/vk_postprocess.h"
 #include "hw_clock.h"
 #include "v_video.h"
+#include "hw_vrmodes.h"
 
 extern int rendered_commandbuffers;
 int current_rendered_commandbuffers;
@@ -176,6 +177,12 @@ void VkCommandBufferManager::WaitForCommands(bool finish, bool uploadOnly)
 		if (!fb->GetVSync())
 			fb->FPSLimit();
 		fb->GetFramebufferManager()->QueuePresent();
+	}
+
+	const auto vrmode = VRMode::GetVRModeCached(true);
+	if (finish && vrmode != nullptr && vrmode->IsVR())
+	{
+		vrmode->SubmitFrame();
 	}
 
 	int numWaitFences = min(mNextSubmit, (int)maxConcurrentSubmitCount);

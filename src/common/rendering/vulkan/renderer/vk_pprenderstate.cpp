@@ -97,6 +97,43 @@ void VkPPRenderState::Draw()
 	}
 }
 
+void VkPPRenderState::DrawToImage(VkTextureImage *image, VkFormat outputFormat, VulkanCommandBuffer *cmdbuffer)
+{
+	fb->GetRenderState()->EndRenderPass();
+
+	VkPPRenderPassKey key = {};
+	key.BlendMode = BlendMode;
+	key.InputTextures = Textures.Size();
+	key.Uniforms = Uniforms.Data.Size();
+	key.Shader = fb->GetShaderManager()->GetVkShader(Shader);
+	key.SwapChain = false;
+	key.ShadowMapBuffers = ShadowMapBuffers;
+	key.OutputFormat = outputFormat;
+	key.StencilTest = WhichDepthStencil::None;
+	key.Samples = VK_SAMPLE_COUNT_1_BIT;
+
+	auto passSetup = fb->GetRenderPassManager()->GetPPRenderPass(key);
+
+	int framebufferWidth = image->Image->width;
+	int framebufferHeight = image->Image->height;
+	VulkanDescriptorSet *input = fb->GetDescriptorSetManager()->GetInput(passSetup, Textures, ShadowMapBuffers);
+
+	VkImageTransition()
+		.AddImage(image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, false)
+		.Execute(cmdbuffer);
+
+	if (!image->PPFramebuffer)
+	{
+		FramebufferBuilder builder;
+		builder.RenderPass(passSetup->RenderPass.get());
+		builder.Size(framebufferWidth, framebufferHeight);
+		builder.AddAttachment(image->View.get());
+		builder.DebugName("VkPPRenderState.CustomFramebuffer");
+		image->PPFramebuffer = builder.Create(fb->device.get());
+	}
+
+	RenderScreenQuad(passSetup, input, image->PPFramebuffer.get(), framebufferWidth, framebufferHeight, Viewport.left, Viewport.top, Viewport.width, Viewport.height, Uniforms.Data.Data(), Uniforms.Data.Size(), false);
+}
 void VkPPRenderState::RenderScreenQuad(VkPPRenderPassSetup *passSetup, VulkanDescriptorSet *descriptorSet, VulkanFramebuffer *framebuffer, int framebufferWidth, int framebufferHeight, int x, int y, int width, int height, const void *pushConstants, uint32_t pushConstantsSize, bool stencilTest)
 {
 	auto cmdbuffer = fb->GetCommands()->GetDrawCommands();

@@ -27,6 +27,7 @@
 #include "vulkan/system/vk_renderdevice.h"
 #include "vulkan/renderer/vk_postprocess.h"
 #include "vk_framebuffer.h"
+#include "hw_vrmodes.h"
 
 CVAR(Bool, vk_hdr, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
 CVAR(Bool, vk_exclusivefullscreen, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
@@ -68,7 +69,16 @@ void VkFramebufferManager::AcquireImage()
 	PresentImageIndex = SwapChain->AcquireImage(SwapChainImageAvailableSemaphore.get());
 	if (PresentImageIndex != -1)
 	{
+		const auto vrmode = VRMode::GetVRModeCached(true);
+		const bool xrFrameStarted = vrmode != nullptr && vrmode->BeginXRFrame();
+		const bool xrSwapchainAcquired = xrFrameStarted && vrmode->AcquireXRSwapchain();
+
 		fb->GetPostprocess()->DrawPresentTexture(fb->mOutputLetterbox, true, false);
+
+		if (xrSwapchainAcquired)
+		{
+			vrmode->RenderVirtualScreen();
+		}
 	}
 }
 

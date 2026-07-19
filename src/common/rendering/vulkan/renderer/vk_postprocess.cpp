@@ -148,9 +148,14 @@ void VkPostprocess::ImageTransitionScene(bool undefinedSrcLayout)
 
 void VkPostprocess::BlitCurrentToImage(VkTextureImage *dstimage, VkImageLayout finallayout)
 {
+	BlitPipelineImageToImage(mCurrentPipelineImage, dstimage, finallayout);
+}
+
+void VkPostprocess::BlitPipelineImageToImage(int pipelineImage, VkTextureImage *dstimage, VkImageLayout finallayout)
+{
 	fb->GetRenderState()->EndRenderPass();
 
-	auto srcimage = &fb->GetBuffers()->PipelineImage[mCurrentPipelineImage];
+	auto srcimage = &fb->GetBuffers()->PipelineImage[pipelineImage];
 	auto cmdbuffer = fb->GetCommands()->GetDrawCommands();
 
 	VkImageTransition()
@@ -241,6 +246,60 @@ void VkPostprocess::DrawPresentTexture(const IntRect &box, bool applyGamma, bool
 	renderstate.Draw();
 }
 
+void VkPostprocess::DrawPresentTextureToImage(VkTextureImage *image, VkFormat outputFormat, const IntRect &box, bool applyGamma, bool screenshot, VkImageLayout finalLayout)
+{
+	VkPPRenderState renderstate(fb);
+	const bool outputIsSrgb = outputFormat == VK_FORMAT_B8G8R8A8_SRGB || outputFormat == VK_FORMAT_R8G8B8A8_SRGB;
+	const PPFilterMode presentFilter = ViewportLinearScale() ? PPFilterMode::Linear : PPFilterMode::Nearest;
+
+	if (!screenshot)
+		hw_postprocess.customShaders.Run(&renderstate, "screen");
+
+	PresentUniforms uniforms;
+	if (!applyGamma)
+	{
+		uniforms.InvGamma = 1.0f;
+		uniforms.Contrast = 1.0f;
+		uniforms.Brightness = 0.0f;
+		uniforms.Saturation = 1.0f;
+	}
+	else
+	{
+		const float gammaValue = clamp<float>(vid_gamma, 0.1f, 4.f);
+		uniforms.InvGamma = outputIsSrgb ? (1.0f / sqrtf(gammaValue)) : (1.0f / gammaValue);
+		uniforms.Contrast = clamp<float>(vid_contrast, 0.1f, 3.f);
+		uniforms.Brightness = clamp<float>(vid_brightness, -0.8f, 0.8f);
+		uniforms.Saturation = clamp<float>(vid_saturation, -15.0f, 15.f);
+		uniforms.GrayFormula = static_cast<int>(gl_satformula);
+	}
+	uniforms.ColorScale = (gl_dither_bpc == -1) ? 255.0f : (float)((1 << gl_dither_bpc) - 1);
+
+	if (screenshot)
+	{
+		uniforms.Scale = { screen->mScreenViewport.width / (float)fb->GetBuffers()->GetWidth(), screen->mScreenViewport.height / (float)fb->GetBuffers()->GetHeight() };
+		uniforms.Offset = { 0.0f, 0.0f };
+	}
+	else
+	{
+		uniforms.Scale = { screen->mScreenViewport.width / (float)fb->GetBuffers()->GetWidth(), -screen->mScreenViewport.height / (float)fb->GetBuffers()->GetHeight() };
+		uniforms.Offset = { 0.0f, 1.0f };
+	}
+
+	uniforms.HdrMode = 0;
+
+	renderstate.Clear();
+	renderstate.Shader = &hw_postprocess.present.Present;
+	renderstate.Uniforms.Set(uniforms);
+	renderstate.Viewport = box;
+	renderstate.SetInputCurrent(0, presentFilter);
+	renderstate.SetInputTexture(1, &hw_postprocess.present.Dither, PPFilterMode::Nearest, PPWrapMode::Repeat);
+	renderstate.SetNoBlend();
+	renderstate.DrawToImage(image, outputFormat, fb->GetCommands()->GetDrawCommands());
+
+	VkImageTransition()
+		.AddImage(image, finalLayout, false)
+		.Execute(fb->GetCommands()->GetDrawCommands());
+}
 void VkPostprocess::AmbientOccludeScene(float m5)
 {
 	int sceneWidth = fb->GetBuffers()->GetSceneWidth();

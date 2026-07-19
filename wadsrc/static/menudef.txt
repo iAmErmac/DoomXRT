@@ -2577,6 +2577,14 @@ OptionValue "FuzzStyle"
 	//5, "$OPTVAL_JAGGEDFUZZ" I can't see any difference between this and 4 so it's disabled for now.
 }
 
+OptionValue VirtualScreenModes
+{
+	0, "Stationary Follow"
+	1, "Stationary"
+	2, "Stationary Follow"
+	3, "Head Follow"
+}
+
 OptionValue VRMode
 {
 	0, "$OPTVAL_NORMAL"
@@ -2690,6 +2698,12 @@ OptionMenu "VR3DMenu" protected
 	}
 	Slider "$GLPREFMNU_VRIPD",					vr_ipd,							0.041, 0.073, 0.001, 3
 	Slider "$GLPREFMNU_VRSCREENDIST",			vr_screendist,					0.2, 10.0, 0.1, 1
+	Option "Virtual Screen Mode",					vr_overlayscreen,					"VirtualScreenModes"
+	Command "Recenter Virtual Screen",	"vr_recenter_virtual_screen"
+	Option "Virtual Screen Always",					vr_overlayscreen_always,				"OnOff"
+	Slider "Virtual Screen Size",					vr_overlayscreen_size,					0.5, 2.0, 0.1, 1
+	Slider "Virtual Screen Distance",					vr_overlayscreen_dist,					0.0, 10.0, 0.1, 1
+	Slider "Virtual Screen Vertical Position",			vr_overlayscreen_vpos,					-1.0, 1.0, 0.1, 1
 }
 
 OptionMenu "PostProcessMenu" protected

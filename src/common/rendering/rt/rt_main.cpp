@@ -35,6 +35,7 @@
 
 #include "rt_state.h"
 #include "rt_video.h"
+#include "common/rendering/stereo3d/openxr/oxr_loader.h"
 #ifndef _WIN32
     #include "rt_linux_loader.h"
 #endif
@@ -67,6 +68,14 @@
 
 RgInterface rt      = {};
 FRtState    rtstate = {};
+
+EXTERN_CVAR( Int, vr_overlayscreen )
+EXTERN_CVAR( Bool, vr_overlayscreen_always )
+EXTERN_CVAR( Float, vr_overlayscreen_size )
+EXTERN_CVAR( Float, vr_overlayscreen_dist )
+EXTERN_CVAR( Float, vr_overlayscreen_vpos )
+
+extern uint64_t g_vr_virtual_screen_recenter_request;
 
 bool g_isremix{ false };
 
@@ -324,6 +333,213 @@ void RG_CHECK( RgResult r )
 {
     assert( ( r ) == RG_RESULT_SUCCESS );
 }
+
+#if defined(HAVE_OPENXR) && defined(HAVE_VULKAN)
+bool RT_CreateOpenXRTmpInstance(const OpenXRBootstrapInfo& xrInfo, VkInstance& outInstance, std::string& outReason)
+{
+    outInstance = VK_NULL_HANDLE;
+
+    std::vector<const char*> enabledExtensions;
+    enabledExtensions.reserve(xrInfo.requiredInstanceExtensions.size());
+    for (const auto& ext : xrInfo.requiredInstanceExtensions)
+    {
+        enabledExtensions.push_back(ext.c_str());
+    }
+
+    VkApplicationInfo appInfo{};
+    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    appInfo.pApplicationName = GAMENAME;
+    appInfo.applicationVersion = 1;
+    appInfo.pEngineName = GAMENAME;
+    appInfo.engineVersion = 1;
+    appInfo.apiVersion = xrInfo.minApiVersionSupported != 0
+        ? static_cast<uint32_t>(xrInfo.minApiVersionSupported)
+        : VK_API_VERSION_1_1;
+
+    VkInstanceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    createInfo.pApplicationInfo = &appInfo;
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size());
+    createInfo.ppEnabledExtensionNames = enabledExtensions.empty() ? nullptr : enabledExtensions.data();
+
+    const VkResult result = vkCreateInstance(&createInfo, nullptr, &outInstance);
+    if (result != VK_SUCCESS || outInstance == VK_NULL_HANDLE)
+    {
+        outReason = "temporary Vulkan instance creation failed";
+        return false;
+    }
+
+    return true;
+}
+
+bool RT_ValidateOpenXRRequiredDeviceExtensions(VkPhysicalDevice physicalDevice, const OpenXRBootstrapInfo& xrInfo, std::string& outReason)
+{
+    uint32_t extensionCount = 0;
+    if (vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr) != VK_SUCCESS)
+    {
+        outReason = "required Vulkan device extensions could not be enumerated";
+        return false;
+    }
+
+    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+    if (extensionCount > 0 &&
+        vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, availableExtensions.data()) != VK_SUCCESS)
+    {
+        outReason = "required Vulkan device extensions could not be enumerated";
+        return false;
+    }
+
+    std::string missingExtensions;
+    for (const auto& required : xrInfo.requiredDeviceExtensions)
+    {
+        bool found = false;
+        for (const auto& available : availableExtensions)
+        {
+            if (required == available.extensionName)
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            if (!missingExtensions.empty())
+            {
+                missingExtensions += ", ";
+            }
+            missingExtensions += required;
+        }
+    }
+
+    if (!missingExtensions.empty())
+    {
+        outReason = "missing required Vulkan device extensions: " + missingExtensions;
+        return false;
+    }
+
+    return true;
+}
+
+bool RT_ValidateOpenXRVulkanEnable2(const OpenXRBootstrapInfo& xrInfo, std::string& outReason)
+{
+    if (!xrInfo.supportsVulkanEnable2)
+    {
+        return true;
+    }
+
+    if (!InitializeOpenXRLoader())
+    {
+        const std::string error = GetLastOpenXRError();
+        outReason = error.empty() ? "OpenXR loader initialization failed" : error;
+        return false;
+    }
+
+    uint32_t extensionCount = 0;
+    if (XR_FAILED(xrEnumerateInstanceExtensionProperties(nullptr, 0, &extensionCount, nullptr)))
+    {
+        outReason = "OpenXR bootstrap could not enumerate runtime extensions";
+        return false;
+    }
+
+    std::vector<XrExtensionProperties> availableExtensions(extensionCount, { XR_TYPE_EXTENSION_PROPERTIES });
+    if (extensionCount > 0 &&
+        XR_FAILED(xrEnumerateInstanceExtensionProperties(nullptr, extensionCount, &extensionCount, availableExtensions.data())))
+    {
+        outReason = "OpenXR bootstrap could not enumerate runtime extensions";
+        return false;
+    }
+
+    const auto hasExtension = [&availableExtensions](const char* name)
+    {
+        for (const auto& ext : availableExtensions)
+        {
+            if (strcmp(ext.extensionName, name) == 0)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    std::vector<const char*> enabledExtensions;
+    if (hasExtension(XR_KHR_VULKAN_ENABLE_EXTENSION_NAME))
+    {
+        enabledExtensions.push_back(XR_KHR_VULKAN_ENABLE_EXTENSION_NAME);
+    }
+    if (hasExtension(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME))
+    {
+        enabledExtensions.push_back(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME);
+    }
+    if (enabledExtensions.empty())
+    {
+        outReason = "OpenXR runtime does not advertise XR_KHR_vulkan_enable or XR_KHR_vulkan_enable2";
+        return false;
+    }
+
+    XrApplicationInfo appInfo{};
+    appInfo.apiVersion = XR_API_VERSION_1_0;
+    appInfo.applicationVersion = 1;
+    appInfo.engineVersion = 1;
+    strncpy(appInfo.applicationName, GAMENAME, sizeof(appInfo.applicationName) - 1);
+    strncpy(appInfo.engineName, GAMENAME, sizeof(appInfo.engineName) - 1);
+
+    XrInstanceCreateInfo createInfo{ XR_TYPE_INSTANCE_CREATE_INFO };
+    createInfo.applicationInfo = appInfo;
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size());
+    createInfo.enabledExtensionNames = enabledExtensions.data();
+
+    XrInstance instance = XR_NULL_HANDLE;
+    if (XR_FAILED(xrCreateInstance(&createInfo, &instance)))
+    {
+        outReason = "OpenXR bootstrap instance creation failed";
+        return false;
+    }
+
+    auto destroyInstance = [&instance]()
+    {
+        if (instance != XR_NULL_HANDLE)
+        {
+            xrDestroyInstance(instance);
+            instance = XR_NULL_HANDLE;
+        }
+    };
+
+    XrSystemGetInfo systemInfo{ XR_TYPE_SYSTEM_GET_INFO };
+    systemInfo.formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
+
+    XrSystemId systemId = XR_NULL_SYSTEM_ID;
+    if (XR_FAILED(xrGetSystem(instance, &systemInfo, &systemId)))
+    {
+        destroyInstance();
+        outReason = "OpenXR bootstrap could not resolve a head mounted display system";
+        return false;
+    }
+
+    PFN_xrGetVulkanGraphicsRequirements2KHR getRequirements2 = nullptr;
+    PFN_xrGetVulkanGraphicsDevice2KHR getDevice2 = nullptr;
+    xrGetInstanceProcAddr(instance, "xrGetVulkanGraphicsRequirements2KHR", reinterpret_cast<PFN_xrVoidFunction*>(&getRequirements2));
+    xrGetInstanceProcAddr(instance, "xrGetVulkanGraphicsDevice2KHR", reinterpret_cast<PFN_xrVoidFunction*>(&getDevice2));
+
+    if (getRequirements2 == nullptr || getDevice2 == nullptr)
+    {
+        destroyInstance();
+        outReason = "OpenXR runtime exposes XR_KHR_vulkan_enable2 without complete Vulkan requirements queries";
+        return false;
+    }
+
+    XrGraphicsRequirementsVulkanKHR requirements{ XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN_KHR };
+    if (XR_FAILED(getRequirements2(instance, systemId, &requirements)))
+    {
+        destroyInstance();
+        outReason = "OpenXR runtime did not provide Vulkan requirements";
+        return false;
+    }
+
+    destroyInstance();
+    return true;
+}
+#endif
 
 #define RG_TRANSFORM_IDENTITY              \
     {                                      \
@@ -2157,6 +2373,8 @@ void RT_Print( const char* pMessage, RgMessageSeverityFlags flags, void* pUserDa
     {
         DPrintf( DMSG_ERROR, "%s\n", pMessage );
 
+        if( V_IsOpenXRResolvedForStartup() ) return;
+
 #ifdef WIN32
         static bool g_breakOnError = true;
         if( g_breakOnError )
@@ -2247,6 +2465,13 @@ std::string RT_InitErrorMessage(RgResult r, bool isdebug, const char* remixdll)
         case RG_RESULT_ERROR_CANT_FIND_SHADER:              msg += "RG_RESULT_ERROR_CANT_FIND_SHADER";              break;
         case RG_RESULT_ERROR_MEMORY_ALIGNMENT:              msg += "RG_RESULT_ERROR_MEMORY_ALIGNMENT";              break;
         case RG_RESULT_ERROR_NO_VULKAN_EXTENSION:           msg += "RG_RESULT_ERROR_NO_VULKAN_EXTENSION";           break;
+        case RG_RESULT_OPENXR_LOADER_UNAVAILABLE:            msg += "RG_RESULT_OPENXR_LOADER_UNAVAILABLE";            break;
+        case RG_RESULT_OPENXR_RUNTIME_UNAVAILABLE:           msg += "RG_RESULT_OPENXR_RUNTIME_UNAVAILABLE";           break;
+        case RG_RESULT_OPENXR_VULKAN_REQUIREMENTS_UNSUPPORTED:msg += "RG_RESULT_OPENXR_VULKAN_REQUIREMENTS_UNSUPPORTED";break;
+        case RG_RESULT_OPENXR_SESSION_ERROR:                 msg += "RG_RESULT_OPENXR_SESSION_ERROR";                 break;
+        case RG_RESULT_OPENXR_SWAPCHAIN_ERROR:               msg += "RG_RESULT_OPENXR_SWAPCHAIN_ERROR";               break;
+        case RG_RESULT_OPENXR_FRAME_ERROR:                   msg += "RG_RESULT_OPENXR_FRAME_ERROR";                   break;
+        case RG_RESULT_OPENXR_PRESENTATION_ERROR:            msg += "RG_RESULT_OPENXR_PRESENTATION_ERROR";            break;
             // clang-format on
 
         default: msg += std::to_string( r ); break;
@@ -2259,9 +2484,22 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
 {
     rt = RgInterface{};
 
+    bool nativeOpenXR = V_IsOpenXRResolvedForStartup();
+    if( nativeOpenXR && g_isremix )
+    {
+        V_FallbackOpenXRStartup( "RTGL1 OpenXR initialization failed", "RTX Remix does not implement the native RTGL1 OpenXR bridge" );
+        nativeOpenXR = false;
+    }
+    RgOpenXRPresentationCreateInfoEXT openxrInfo{
+        .sType = RG_STRUCTURE_TYPE_OPENXR_PRESENTATION_CREATE_INFO_EXT,
+        .pNext = nullptr,
+        .enable = static_cast< RgBool32 >( nativeOpenXR ),
+        .desktopMirror = static_cast< RgBool32 >( true ),
+    };
+
     auto info = RgInstanceCreateInfo
     {
-        .sType = RG_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pNext = NULL,
+        .sType = RG_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pNext = nativeOpenXR ? &openxrInfo : nullptr,
 
         .version = RG_RTGL_VERSION_API, .sizeOfRgInterface = sizeof( RgInterface ),
 
@@ -2277,7 +2515,8 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
             Args->CheckParm( "-rtdebug" )
                 ? RgMessageSeverityFlags{ RG_MESSAGE_SEVERITY_VERBOSE | RG_MESSAGE_SEVERITY_INFO |
                                           RG_MESSAGE_SEVERITY_WARNING | RG_MESSAGE_SEVERITY_ERROR }
-                : RgMessageSeverityFlags{ 0 },
+                : nativeOpenXR ? RgMessageSeverityFlags{ RG_MESSAGE_SEVERITY_ERROR }
+                               : RgMessageSeverityFlags{ 0 },
 
         .primaryRaysMaxAlbedoLayers = 1, .indirectIlluminationMaxAlbedoLayers = 1,
 
@@ -2325,6 +2564,18 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
     }
     RgResult r = RT_DlopenAndCreateXlib( &info, xlibDisplay, xlibWindow, isdebug, &rt );
 #endif
+    if( r != RG_RESULT_SUCCESS && nativeOpenXR )
+    {
+        const auto nativeFailure = RT_InitErrorMessage( r, isdebug, remixdll );
+        V_FallbackOpenXRStartup( "RTGL1 OpenXR initialization failed", nativeFailure.c_str() );
+        nativeOpenXR = false;
+        info.pNext = nullptr;
+#ifdef _WIN32
+        r = rgLoadLibraryAndCreate( &info, isdebug, remixdll, &rt, nullptr );
+#else
+        r = RT_DlopenAndCreateXlib( &info, xlibDisplay, xlibWindow, isdebug, &rt );
+#endif
+    }
     if( r != RG_RESULT_SUCCESS )
     {
         auto msg = RT_InitErrorMessage(r, isdebug, remixdll);
@@ -2397,10 +2648,13 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
 }
 
 #ifdef _WIN32
-RG_D3D12CORE_HELPER( "rt/" )
+RG_D3D12CORE_HELPER( "" )
+static std::string g_d3d12SdkPath;
 
 Win32RTVideo::Win32RTVideo()
 {
+    g_d3d12SdkPath = std::string( RT_ResolveRuntimePath() ) + "bin" + char( 92 );
+    D3D12SDKPath = g_d3d12SdkPath.c_str();
     extern std::atomic_bool g_continueMain;
     extern std::atomic_bool g_forceLnchThreadStop;
     while( !g_continueMain )
@@ -2423,30 +2677,31 @@ Win32RTVideo::Win32RTVideo()
         };
 
         const std::pair< std::filesystem::path, int > dlls[] = {
-            { "rt/bin/D3D12Core.dll", RT_FEATURE_FSR3_FG | RT_FEATURE_DLSS3_FG },
-            { "rt/bin/nvngx_dlss.dll", RT_FEATURE_DLSS2 },
-            { "rt/bin/nvngx_dlssg.dll", RT_FEATURE_DLSS3_FG },
-            { "rt/bin/NvLowLatencyVk.dll", RT_FEATURE_DLSS3_FG },
-            { "rt/bin/sl.dlss.dll", RT_FEATURE_DLSS3_FG },
-            { "rt/bin/sl.dlss_g.dll", RT_FEATURE_DLSS3_FG },
-            { "rt/bin/sl.reflex.dll", RT_FEATURE_DLSS3_FG },
-            { "rt/bin/sl.pcl.dll", RT_FEATURE_DLSS3_FG },
-            { "rt/bin/sl.common.dll", RT_FEATURE_DLSS3_FG },
-            { "rt/bin/sl.interposer.dll", RT_FEATURE_DLSS3_FG },
-            { "rt/bin/ffx_fsr2_x64.dll", RT_FEATURE_FSR2 },
-            { "rt/bin/ffx_fsr3_x64.dll", RT_FEATURE_FSR3_FG },
-            { "rt/bin/ffx_fsr3upscaler_x64.dll", RT_FEATURE_FSR3_FG },
-            { "rt/bin/ffx_frameinterpolation_x64.dll", RT_FEATURE_FSR3_FG },
-            { "rt/bin/ffx_opticalflow_x64.dll", RT_FEATURE_FSR3_FG },
-            { "rt/bin/ffx_backend_dx12_x64.dll", RT_FEATURE_FSR3_FG },
-            { "rt/bin/ffx_backend_vk_x64.dll", RT_FEATURE_FSR2 | RT_FEATURE_FSR3_FG },
+            { "bin/D3D12Core.dll", RT_FEATURE_FSR3_FG | RT_FEATURE_DLSS3_FG },
+            { "bin/nvngx_dlss.dll", RT_FEATURE_DLSS2 },
+            { "bin/nvngx_dlssg.dll", RT_FEATURE_DLSS3_FG },
+            { "bin/NvLowLatencyVk.dll", RT_FEATURE_DLSS3_FG },
+            { "bin/sl.dlss.dll", RT_FEATURE_DLSS3_FG },
+            { "bin/sl.dlss_g.dll", RT_FEATURE_DLSS3_FG },
+            { "bin/sl.reflex.dll", RT_FEATURE_DLSS3_FG },
+            { "bin/sl.pcl.dll", RT_FEATURE_DLSS3_FG },
+            { "bin/sl.common.dll", RT_FEATURE_DLSS3_FG },
+            { "bin/sl.interposer.dll", RT_FEATURE_DLSS3_FG },
+            { "bin/ffx_fsr2_x64.dll", RT_FEATURE_FSR2 },
+            { "bin/ffx_fsr3_x64.dll", RT_FEATURE_FSR3_FG },
+            { "bin/ffx_fsr3upscaler_x64.dll", RT_FEATURE_FSR3_FG },
+            { "bin/ffx_frameinterpolation_x64.dll", RT_FEATURE_FSR3_FG },
+            { "bin/ffx_opticalflow_x64.dll", RT_FEATURE_FSR3_FG },
+            { "bin/ffx_backend_dx12_x64.dll", RT_FEATURE_FSR3_FG },
+            { "bin/ffx_backend_vk_x64.dll", RT_FEATURE_FSR2 | RT_FEATURE_FSR3_FG },
         };
 
         auto failedPaths    = std::string{};
         int  failedFeatures = 0;
         for( const auto& [ dll, feature ] : dlls )
         {
-            if( !exists( dll ) )
+            const auto resolvedDll = std::filesystem::path( RT_ResolveRuntimeSubpath( dll.string().c_str() ) );
+            if( !exists( resolvedDll ) )
             {
                 failedPaths += "    " + dll.filename().string() + '\n';
                 failedFeatures |= feature;
@@ -3402,6 +3657,23 @@ void RTFrameBuffer::RT_BeginFrame()
         .staticSceneAnimationTime = g_rt_cutscenename ? RT_CutsceneTime() : 0,
     };
     g_resetfluid = false;
+
+    if( rt.rgSetOpenXRVirtualScreenSettingsEXT )
+    {
+        const auto virtualScreenSettings = RgOpenXRVirtualScreenSettingsEXT{
+            .sType             = RG_STRUCTURE_TYPE_OPENXR_VIRTUAL_SCREEN_SETTINGS_EXT,
+            .pNext             = nullptr,
+            .mode              = vr_overlayscreen,
+            .always            = static_cast< RgBool32 >( vr_overlayscreen_always ? 1 : 0 ),
+            .size              = vr_overlayscreen_size,
+            .distance          = vr_overlayscreen_dist,
+            .verticalPosition  = vr_overlayscreen_vpos,
+            .recenterRequest  = g_vr_virtual_screen_recenter_request,
+            .renderWidth       = RT_GetCurrentWindowSize().width,
+            .renderHeight      = RT_GetCurrentWindowSize().height,
+        };
+        RG_CHECK( rt.rgSetOpenXRVirtualScreenSettingsEXT( &virtualScreenSettings ) );
+    }
 
     RgResult r = rt.rgStartFrame( &info );
     RG_CHECK( r );

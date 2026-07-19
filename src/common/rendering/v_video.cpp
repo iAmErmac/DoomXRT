@@ -65,6 +65,7 @@
 
 EXTERN_CVAR(Int, menu_resolution_custom_width)
 EXTERN_CVAR(Int, menu_resolution_custom_height)
+EXTERN_CVAR(Int, vr_mode)
 
 CVAR(Int, win_x, -1, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Int, win_y, -1, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
@@ -127,16 +128,172 @@ CUSTOM_CVAR(Int, vid_preferbackend, 1, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_N
 
 	Printf("Changing the video backend requires a restart for " GAMENAME ".\n");
 }
+namespace
+{
+	struct VRStartupIntent
+	{
+		bool resolved = false;
+		bool fallbackLogged = false;
+		int requestedVrMode = 0;
+		int resolvedVrMode = 0;
+		int requestedBackend = 0;
+		int resolvedBackend = 0;
+		bool requestedOpenXR = false;
+		bool resolvedOpenXR = false;
+		bool resolvedVirtualScreen = false;
+	};
+
+	VRStartupIntent gVRStartupIntent;
+
+	int ClampBackendPreference(int backend)
+	{
+		if (backend == 3)
+		{
+			vid_preferbackend = backend = 2;
+		}
+		else if (backend < 0 || backend > 3)
+		{
+			backend = 0;
+		}
+		return backend;
+	}
+
+	int GetRequestedVrMode()
+	{
+		if (vr_mode == 15)
+		{
+			return 15;
+		}
+
+		if (Args == nullptr)
+		{
+			return vr_mode;
+		}
+
+		if (const char* value = Args->CheckValue("+vr_mode"))
+		{
+			return atoi(value);
+		}
+
+		if (const char* value = Args->CheckValue("vr_mode"))
+		{
+			return atoi(value);
+		}
+
+		return vr_mode;
+	}
+
+	const char* GetBackendName(int backend)
+	{
+		switch (backend)
+		{
+		case 1: return "Vulkan";
+		case 2: return "OpenGLES";
+		default: return "OpenGL";
+		}
+	}
+
+	const char* GetResolvedStartupName(const VRStartupIntent& intent)
+	{
+#if HAVE_RT
+		if (intent.resolvedOpenXR)
+		{
+			return "RTGL1 + OpenXR virtual screen";
+		}
+		return "RTGL1 flatscreen";
+#else
+		if (intent.resolvedOpenXR)
+		{
+			return "Vulkan + OpenXR virtual screen";
+		}
+		return intent.resolvedBackend == 1 ? "Vulkan flatscreen" : "OpenGL flatscreen";
+#endif
+	}
+}
+
+static bool WantsOpenXRBackend()
+{
+#if !defined(HAVE_VULKAN)
+	return false;
+#else
+	return GetRequestedVrMode() == 15;
+#endif
+}
+
+void V_ResolveStartupRendererIntent()
+{
+	if (gVRStartupIntent.resolved)
+	{
+		return;
+	}
+
+	gVRStartupIntent.requestedVrMode = GetRequestedVrMode();
+	gVRStartupIntent.requestedOpenXR = gVRStartupIntent.requestedVrMode == 15;
+	gVRStartupIntent.requestedBackend = ClampBackendPreference(vid_preferbackend);
+	if (gVRStartupIntent.requestedOpenXR)
+	{
+		gVRStartupIntent.requestedBackend = 1;
+	}
+
+	gVRStartupIntent.resolvedVrMode = gVRStartupIntent.requestedVrMode;
+	gVRStartupIntent.resolvedBackend = gVRStartupIntent.requestedBackend;
+	gVRStartupIntent.resolvedOpenXR = gVRStartupIntent.requestedOpenXR;
+	gVRStartupIntent.resolvedVirtualScreen = gVRStartupIntent.requestedOpenXR;
+	if (gVRStartupIntent.resolvedOpenXR)
+	{
+		gVRStartupIntent.resolvedBackend = 1;
+	}
+
+	Printf("VR startup request: vr_mode=%d backend=%s\n",
+		gVRStartupIntent.requestedVrMode,
+		GetBackendName(gVRStartupIntent.requestedBackend));
+	Printf("VR startup resolved: %s\n", GetResolvedStartupName(gVRStartupIntent));
+
+	gVRStartupIntent.resolved = true;
+}
+
+bool V_IsOpenXRResolvedForStartup()
+{
+	V_ResolveStartupRendererIntent();
+	return gVRStartupIntent.resolvedOpenXR;
+}
+
+bool V_FallbackOpenXRStartup(const char* failureStage, const char* reason)
+{
+	V_ResolveStartupRendererIntent();
+
+	if (gVRStartupIntent.fallbackLogged)
+	{
+		vr_mode = 0;
+		gVRStartupIntent.resolvedVrMode = 0;
+		gVRStartupIntent.resolvedOpenXR = false;
+		gVRStartupIntent.resolvedVirtualScreen = false;
+		return false;
+	}
+
+	const char* prefix = (failureStage != nullptr && failureStage[0] != '\0') ? failureStage : "OpenXR startup failed";
+    const char* message = (reason != nullptr && reason[0] != '\0') ? reason : "unknown error";
+    Printf("%s for vr_mode 15; falling back to vr_mode 0: %s\n", prefix, message);
+
+	vr_mode = 0;
+	gVRStartupIntent.resolvedVrMode = 0;
+	gVRStartupIntent.resolvedOpenXR = false;
+	gVRStartupIntent.resolvedVirtualScreen = false;
+	gVRStartupIntent.fallbackLogged = true;
+
+	Printf("VR startup resolved: %s\n", GetResolvedStartupName(gVRStartupIntent));
+	return true;
+}
 
 int V_GetBackend()
 {
-	int v = vid_preferbackend;
-	if (v == 3) vid_preferbackend = v = 2;
-	else if (v < 0 || v > 3) v = 0;
-	return v;
+	V_ResolveStartupRendererIntent();
+	if (WantsOpenXRBackend())
+	{
+		return 1;
+	}
+	return ClampBackendPreference(vid_preferbackend);
 }
-
-
 CUSTOM_CVAR(Int, uiscale, 0, CVAR_ARCHIVE | CVAR_NOINITCALL)
 {
 	if (self < 0)
@@ -405,6 +562,7 @@ void V_Init2()
 	val.Bool = !!Args->CheckParm("-devparm");
 	ticker->SetGenericRepDefault(val, CVAR_Bool);
 
+	V_ResolveStartupRendererIntent();
 
 	I_InitGraphics();
 

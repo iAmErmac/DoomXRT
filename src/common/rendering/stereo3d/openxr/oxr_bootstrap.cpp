@@ -290,19 +290,8 @@ bool QueryOpenXRVulkanRequirements(OpenXRBootstrapInfo& outInfo)
 
 bool QueryOpenXRVulkanRequirementsForMode(int& vrMode, OpenXRBootstrapInfo& outInfo)
 {
-	if (QueryOpenXRVulkanRequirements(outInfo))
-	{
-		return true;
-	}
-
-	if (vrMode == VR_OPENXR)
-	{
-		const std::string error = GetLastOpenXRError();
-		Printf("OpenXR bootstrap failed for vr_mode 15; falling back to vr_mode 0: %s\n",
-			error.empty() ? "unknown error" : error.c_str());
-		vrMode = VR_MONO;
-	}
-	return false;
+	(void)vrMode;
+	return QueryOpenXRVulkanRequirements(outInfo);
 }
 
 bool IsOpenXRRuntimePresent()

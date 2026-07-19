@@ -1325,10 +1325,10 @@ if( HAVE_RT )
 				COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:zdoom>/rt/bin"
 				COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:zdoom>/rt/bin/debug"
 				COMMAND ${CMAKE_COMMAND} -E copy_if_different
-					"${RTGL1_SDK_PATH}/Build/bin/RTGL1.dll"
+					$<IF:$<CONFIG:Debug>,${RTGL1_SDK_PATH}/Build/bin/debug/RTGL1.dll,${RTGL1_SDK_PATH}/Build/bin/RTGL1.dll>
 					"$<TARGET_FILE_DIR:zdoom>/rt/bin/RTGL1.dll"
 				COMMAND ${CMAKE_COMMAND} -E copy_if_different
-					"${RTGL1_SDK_PATH}/Build/bin/RTGL1.dll"
+					$<IF:$<CONFIG:Debug>,${RTGL1_SDK_PATH}/Build/bin/debug/RTGL1.dll,${RTGL1_SDK_PATH}/Build/bin/RTGL1.dll>
 					"$<TARGET_FILE_DIR:zdoom>/rt/bin/debug/RTGL1.dll"
 				COMMENT "Copying RTGL1.dll..."
 			)

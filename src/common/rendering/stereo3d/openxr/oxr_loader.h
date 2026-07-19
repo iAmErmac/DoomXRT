@@ -98,10 +98,7 @@ inline bool QueryOpenXRVulkanRequirements(OpenXRBootstrapInfo& outInfo)
 
 inline bool QueryOpenXRVulkanRequirementsForMode(int& vrMode, OpenXRBootstrapInfo& outInfo)
 {
-	if (vrMode == 15)
-	{
-		vrMode = 0;
-	}
+	(void)vrMode;
 	outInfo = {};
 	return false;
 }

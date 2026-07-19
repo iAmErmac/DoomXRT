@@ -10,6 +10,8 @@
 #include <assert.h>
 #include <filesystem>
 #include <string>
+#include <cstring>
+#include "rt/rt_helpers.h"
 
 namespace
 {
@@ -53,7 +55,11 @@ struct img_t
 auto loadimg( const char* path ) -> img_t
 {
     int  x, y, channels;
-    auto img = stbi_load( path, &x, &y, &channels, 4 );
+    const char* resolved_path =
+        ( path && path[0] == 'r' && path[1] == 't' && ( path[2] == '/' || path[2] == 92 ) )
+            ? RT_ResolveRuntimeSubpath( path + 3 )
+            : path;
+    auto img = stbi_load( resolved_path, &x, &y, &channels, 4 );
     if( !img || x <= 0 || y <= 0 )
     {
         return {};
@@ -294,12 +300,14 @@ remixresult_e CheckAndAskUser( bool force_doom2, std::vector< const char* >& out
 {
     out_args.clear();
 
-    if( !std::filesystem::exists( "rt/bin_remix/d3d9.dll" ) )
+    if( !std::filesystem::exists(
+            std::filesystem::path( RT_ResolveRuntimeSubpath( "bin_remix/d3d9.dll" ) ) ) )
     {
         ShowWarning( "Can't find \'rt/bin_remix/d3d9.dll\'" );
         return REMIXRESULT_EXIT;
     }
-    if( !std::filesystem::exists( "rt/bin_remix/RTGL1.dll" ) )
+    if( !std::filesystem::exists(
+            std::filesystem::path( RT_ResolveRuntimeSubpath( "bin_remix/RTGL1.dll" ) ) ) )
     {
         ShowWarning( "Can't find \'rt/bin_remix/RTGL1.dll\'" );
         return REMIXRESULT_EXIT;

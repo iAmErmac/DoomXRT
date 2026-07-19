@@ -3,6 +3,7 @@
 #if HAVE_RT
 
 #include "c_cvars.h"
+#include "common/utility/cmdlib.h"
 
 #include <cstdlib>
 #include <cstdio>
@@ -79,6 +80,15 @@ const char* Env(const char* name)
     return value && value[0] ? value : nullptr;
 }
 
+fs::path ResolveRelativeToProgram(fs::path path)
+{
+    if (path.empty() || path.is_absolute() || progdir.GetChars()[0] == '\0')
+    {
+        return path;
+    }
+    return fs::path(progdir.GetChars()) / path;
+}
+
 fs::path ExpandUser(std::string_view value)
 {
     if (value.empty())
@@ -110,22 +120,22 @@ fs::path DefaultCacheRuntime()
     {
         return fs::path(home) / ".cache" / "doomxr" / "runtime" / "current";
     }
-    return fs::path("rt");
+    return ResolveRelativeToProgram(fs::path("rt"));
 }
 
 fs::path PreferredRuntimePath()
 {
     if (const char* env = Env("DOOMXR_RT_RUNTIME_DIR"))
     {
-        return ExpandUser(env);
+        return ResolveRelativeToProgram(ExpandUser(env));
     }
     if (const char* env = Env("GZDOOM_RT_RUNTIME_DIR"))
     {
-        return ExpandUser(env);
+        return ResolveRelativeToProgram(ExpandUser(env));
     }
     if (static_cast<const char*>(rt_runtime_dir)[0])
     {
-        return ExpandUser(static_cast<const char*>(rt_runtime_dir));
+        return ResolveRelativeToProgram(ExpandUser(static_cast<const char*>(rt_runtime_dir)));
     }
     return DefaultCacheRuntime();
 }
@@ -136,18 +146,19 @@ std::vector<fs::path> AssetCandidates()
 
     if (const char* env = Env("DOOMXR_RT_ASSET_DIR"))
     {
-        result.push_back(ExpandUser(env));
+        result.push_back(ResolveRelativeToProgram(ExpandUser(env)));
     }
     if (const char* env = Env("GZDOOM_RT_ASSET_DIR"))
     {
-        result.push_back(ExpandUser(env));
+        result.push_back(ResolveRelativeToProgram(ExpandUser(env)));
     }
     if (static_cast<const char*>(rt_asset_dir)[0])
     {
-        result.push_back(ExpandUser(static_cast<const char*>(rt_asset_dir)));
+        result.push_back(ResolveRelativeToProgram(ExpandUser(static_cast<const char*>(rt_asset_dir))));
     }
     result.push_back(ExpandUser("~/Games/doomxr/assets/doomxr-runtime/1.0.2/rt"));
     result.push_back(ExpandUser("~/Games/doomxr/rt"));
+    result.push_back(ResolveRelativeToProgram(fs::path("rt")));
     result.push_back("rt");
 
     return result;
