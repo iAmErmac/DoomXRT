@@ -870,6 +870,53 @@ auto rtcolor_bgr_alphagamma( const PalEntry& e ) -> RgColor4DPacked32
 
 
 class RTRenderState;
+namespace
+{
+
+// RTGL1 owns the native OpenXR session for this framebuffer. Querying VRMode here
+// would initialize DoomXRMode's Vulkan compositor path; Phase 1's resolved state
+// is therefore the sole authority and falls back to flatscreen on failure.
+bool RT_IsNativeOpenXRResolvedForStartup()
+{
+    return V_IsOpenXRResolvedForStartup();
+}
+
+struct RTEffectiveSettings
+{
+    bool  preferDxgiPresent;
+    bool  forceFrameGenerationOff;
+    float renderScale;
+    int   maxReflectRefractDepth;
+    float minRoughness;
+};
+
+RTEffectiveSettings RT_GetEffectiveSettings()
+{
+    const bool nativeOpenXR = RT_IsNativeOpenXRResolvedForStartup();
+    const auto settings     = RTEffectiveSettings{
+        .preferDxgiPresent       = nativeOpenXR ? false : ( cvar::rt_available_dxgi ? bool{ cvar::rt_dxgi } : false ),
+        .forceFrameGenerationOff = nativeOpenXR,
+        .renderScale             = nativeOpenXR ? 0.75f : float{ cvar::rt_renderscale },
+        .maxReflectRefractDepth  = nativeOpenXR ? 2 : int{ cvar::rt_reflrefr_depth },
+        .minRoughness            = nativeOpenXR ? 0.20f : float{ cvar::rt_refl_thresh },
+    };
+
+    static bool wasNativeOpenXR = false;
+    if( nativeOpenXR && !wasNativeOpenXR )
+    {
+        DPrintf( DMSG_NOTIFY,
+                 "RT OpenXR effective policy: DXGI disabled, frame generation disabled, render scale %.2f, reflection depth %d, minimum roughness %.2f\n",
+                 settings.renderScale,
+                 settings.maxReflectRefractDepth,
+                 settings.minRoughness );
+    }
+    wasNativeOpenXR = nativeOpenXR;
+
+    return settings;
+}
+
+
+} // anonymous namespace
 
 class RTFrameBuffer : public SystemBaseFrameBuffer
 {
@@ -915,6 +962,7 @@ private:
 
 private:
     RTRenderState* m_state{ nullptr };
+    RTEffectiveSettings m_effectiveSettings{};
     bool           m_vsync{ false };
     bool           m_wassky{ false };
 };
@@ -2485,6 +2533,9 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
     rt = RgInterface{};
 
     bool nativeOpenXR = V_IsOpenXRResolvedForStartup();
+    // RTGL1 owns native XR creation and presentation. Use Phase 1's resolved
+    // startup state here instead of DoomXRMode, whose Vulkan compositor requires
+    // a VulkanRenderDevice that the RT framebuffer intentionally does not have.
     if( nativeOpenXR && g_isremix )
     {
         V_FallbackOpenXRStartup( "RTGL1 OpenXR initialization failed", "RTX Remix does not implement the native RTGL1 OpenXR bridge" );
@@ -2876,14 +2927,14 @@ RgExtent2D RT_GetCurrentWindowSize()
     };
 }
 
-void RT_ResolutionToRtgl( RgStartFrameRenderResolutionParams* dst, const RgExtent2D winsize )
+void RT_ResolutionToRtgl( RgStartFrameRenderResolutionParams* dst, const RgExtent2D winsize, const RTEffectiveSettings& settings )
 {
     const auto aspect =
         static_cast< double >( winsize.width ) / static_cast< double >( winsize.height );
 
-    if( cvar::rt_renderscale > 0.2f )
+    if( settings.renderScale > 0.2f )
     {
-        auto scale = std::clamp( double( *cvar::rt_renderscale ), 0.2, 1.0 );
+        auto scale = std::clamp( double( settings.renderScale ), 0.2, 1.0 );
 
         dst->customRenderSize.width    = static_cast< uint32_t >( winsize.width * scale );
         dst->customRenderSize.height   = static_cast< uint32_t >( winsize.height * scale );
@@ -2970,7 +3021,7 @@ auto RT_GetSharpenTechniqueFromCvar( bool dlssOrFsr2 ) -> RgRenderSharpenTechniq
     }
 }
 
-void RT_UpscaleCvarsToRtgl( RgStartFrameRenderResolutionParams* pDst )
+void RT_UpscaleCvarsToRtgl( RgStartFrameRenderResolutionParams* pDst, const RTEffectiveSettings& settings )
 {
     cvar::rt_available_dlss2 =
         rt.rgUtilIsUpscaleTechniqueAvailable( RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS,
@@ -3095,6 +3146,11 @@ void RT_UpscaleCvarsToRtgl( RgStartFrameRenderResolutionParams* pDst )
     }
 
     pDst->sharpenTechnique = RT_GetSharpenTechniqueFromCvar( amdFsr || nvDlss );
+    if( settings.forceFrameGenerationOff )
+    {
+        pDst->frameGeneration = RG_FRAME_GENERATION_MODE_OFF;
+    }
+
 }
 
 template< typename T >
@@ -3584,14 +3640,16 @@ void RTFrameBuffer::RT_BeginFrame()
 
     classic_toggle::Animate();
 
+    m_effectiveSettings = RT_GetEffectiveSettings();
+
 
     auto resolution_params = RgStartFrameRenderResolutionParams{
         .sType             = RG_STRUCTURE_TYPE_START_FRAME_RENDER_RESOLUTION_PARAMS,
         .pNext             = nullptr,
-        .preferDxgiPresent = cvar::rt_available_dxgi ? cvar::rt_dxgi : false,
+        .preferDxgiPresent = m_effectiveSettings.preferDxgiPresent,
     };
-    RT_ResolutionToRtgl( &resolution_params, RT_GetCurrentWindowSize() );
-    RT_UpscaleCvarsToRtgl( &resolution_params );
+    RT_ResolutionToRtgl( &resolution_params, RT_GetCurrentWindowSize(), m_effectiveSettings );
+    RT_UpscaleCvarsToRtgl( &resolution_params, m_effectiveSettings );
 
     ext_RgStartFrameRemixParams remix_params;
     if( g_isremix )
@@ -3771,7 +3829,7 @@ void RTFrameBuffer::RT_DrawFrame()
     auto reflrefr_params = RgDrawFrameReflectRefractParams{
         .sType                   = RG_STRUCTURE_TYPE_DRAW_FRAME_REFLECT_REFRACT_PARAMS,
         .pNext                   = &tm_params,
-        .maxReflectRefractDepth  = safe_uint( *cvar::rt_reflrefr_depth ),
+        .maxReflectRefractDepth  = safe_uint( m_effectiveSettings.maxReflectRefractDepth ),
         .typeOfMediaAroundCamera = RG_MEDIA_TYPE_VACUUM,
         .indexOfRefractionGlass  = cvar::rt_refr_glass,
         .indexOfRefractionWater  = cvar::rt_refr_water,
@@ -3823,7 +3881,7 @@ void RTFrameBuffer::RT_DrawFrame()
         .normalMapStrength      = cvar::rt_normalmap_stren,
         .emissionMapBoost       = cvar::rt_emis_mapboost,
         .emissionMaxScreenColor = cvar::rt_emis_maxscrcolor,
-        .minRoughness           = cvar::rt_refl_thresh,
+        .minRoughness           = m_effectiveSettings.minRoughness,
         .heightMapDepth         = 0.02f * cvar::rt_heightmap_stren,
     };
 
