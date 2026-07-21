@@ -53,6 +53,8 @@
 
 // Set up 3D-specific console variables:
 CVAR(Int, vr_mode, 0, CVAR_GLOBALCONFIG|CVAR_ARCHIVE)
+CVAR(Float, vr_snapTurn, 45.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_switch_sticks, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
 // RTGL/DoomXR virtual-screen presentation controls
 CVAR(Int, vr_overlayscreen, 2, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)

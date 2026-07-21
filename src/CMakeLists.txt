@@ -822,6 +822,7 @@ endif()
 if (HAVE_RT)
 	set(RT_SOURCES
 		common/rendering/rt/rt_main.cpp
+        common/rendering/rt/rt_openxr_input.cpp
 		common/rendering/rt/rt_cutscene.cpp
 		common/rendering/rt/rt_runtime.cpp
 	)

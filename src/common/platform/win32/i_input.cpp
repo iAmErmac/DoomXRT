@@ -58,6 +58,7 @@
 #include "c_dispatch.h"
 #include "m_argv.h"
 #include "i_input.h"
+#include "../../rendering/rt/rt_openxr_input.h"
 #include "v_video.h"
 #include "i_sound.h"
 #include "d_gui.h"
@@ -689,6 +690,7 @@ void I_GetAxes(float axes[NUM_JOYAXIS])
 			}
 		}
 	}
+	RT_OpenXRInputAddAxes(axes);
 }
 
 void I_GetJoysticks(TArray<IJoystickConfig *> &sticks)

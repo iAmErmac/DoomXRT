@@ -35,6 +35,7 @@
 
 #include "rt_state.h"
 #include "rt_video.h"
+#include "rt_openxr_input.h"
 #include "common/rendering/stereo3d/openxr/oxr_loader.h"
 #ifndef _WIN32
     #include "rt_linux_loader.h"
@@ -67,6 +68,9 @@
 #include <RTGL1/RTGL1.h>
 
 RgInterface rt      = {};
+#ifdef _WIN32
+HMODULE g_rt_dll = nullptr;
+#endif
 FRtState    rtstate = {};
 
 EXTERN_CVAR( Int, vr_overlayscreen )
@@ -74,6 +78,8 @@ EXTERN_CVAR( Bool, vr_overlayscreen_always )
 EXTERN_CVAR( Float, vr_overlayscreen_size )
 EXTERN_CVAR( Float, vr_overlayscreen_dist )
 EXTERN_CVAR( Float, vr_overlayscreen_vpos )
+EXTERN_CVAR( Float, vr_snapTurn )
+EXTERN_CVAR( Bool, vr_switch_sticks )
 
 extern uint64_t g_vr_virtual_screen_recenter_request;
 
@@ -2606,7 +2612,7 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
     const char* remixdll = g_isremix ? "\\bin_remix\\RTGL1.dll" : nullptr;
 
 #ifdef _WIN32
-    RgResult r = rgLoadLibraryAndCreate( &info, isdebug, remixdll, &rt, nullptr );
+    RgResult r = rgLoadLibraryAndCreate( &info, isdebug, remixdll, &rt, &g_rt_dll );
 #else
     if( g_isremix )
     {
@@ -2622,7 +2628,7 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
         nativeOpenXR = false;
         info.pNext = nullptr;
 #ifdef _WIN32
-        r = rgLoadLibraryAndCreate( &info, isdebug, remixdll, &rt, nullptr );
+        r = rgLoadLibraryAndCreate( &info, isdebug, remixdll, &rt, &g_rt_dll );
 #else
         r = RT_DlopenAndCreateXlib( &info, xlibDisplay, xlibWindow, isdebug, &rt );
 #endif
@@ -2641,6 +2647,9 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
         exit( -1 );
     }
 
+#ifdef _WIN32
+    RT_OpenXRInputBindModule( g_rt_dll );
+#endif
     // on first start, try to set DLSS, if available
     if( cvar::rt_firststart )
     {
@@ -3735,7 +3744,7 @@ void RTFrameBuffer::RT_BeginFrame()
 
     RgResult r = rt.rgStartFrame( &info );
     RG_CHECK( r );
-
+    RT_OpenXRInputPoll();
 
     auto l_clm = [ staticscene_status ]() {
         if( staticscene_status & RG_STATIC_SCENE_STATUS_EXPORT_STARTED )
