@@ -906,3 +906,8 @@ Allow Background Controller Input,JOYMNU_JOYENABLEINBACKGROUND,"This is enabled 
 Save Game Sorting Order,MISCMNU_SAVEORDER,Order to sort the list of saved games in the save and load game menu. This used to only be alphabetical.,,,,,Gespeicherte Spiele sortieren nach,,Ordo de konservitaj ludadoj,Orden de las partidas guardadas,,,,Redoslijed sortiranja spremljenih igara,,,,,,,,Ordem de jogos salvos,,,Порядок сортировки сохранений,,,,,,
 Alphabetical,OPTVAL_ALPHABETICAL,,,,,,Alphabetisch,,Alfabeta,Alfabético,,,,Abecedni,,,,,,,,Alfabética,,,По алфавиту,,,,,,
 Last Saved Time,OPTVAL_LASTSAVEDTIME,,,,,,Zuletzt gespeichert,,Laste konservita tempo,Guardado más reciente,,,,Posljednje spremljeno vrijeme,,,,,,,,Mais recente,,,Время последнего сохранения,,,,,,
+Presentation,VRMNU_PRESENTATION,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Comfort & Controls,VRMNU_COMFORT_CONTROLS,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Hands & Weapons,VRMNU_HANDS_WEAPONS,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+HUD & Automap,VRMNU_HUD_AUTOMAP,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Advanced,VRMNU_ADVANCED,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,

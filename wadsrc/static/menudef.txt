@@ -2691,6 +2691,16 @@ OptionMenu "OpenGLOptions" protected
 OptionMenu "VR3DMenu" protected
 {
 	Title "$GLPREFMNU_VRMODE"
+	Submenu "$VRMNU_PRESENTATION", "VRPresentationMenu"
+	Submenu "$VRMNU_COMFORT_CONTROLS", "VRComfortControlsMenu"
+	Submenu "$VRMNU_HANDS_WEAPONS", "VRHandsWeaponsMenu"
+	Submenu "$VRMNU_HUD_AUTOMAP", "VRHudAutomapMenu"
+	Submenu "$VRMNU_ADVANCED", "VRAdvancedMenu"
+}
+
+OptionMenu "VRPresentationMenu" protected
+{
+	Title "$VRMNU_PRESENTATION"
 	Option "$GLMNU_3DMODE",					vr_mode, 						"VRMode"
 	IfOption(Windows)
 	{
@@ -2705,6 +2715,11 @@ OptionMenu "VR3DMenu" protected
 	Slider "Virtual Screen Distance",					vr_overlayscreen_dist,					0.0, 10.0, 0.1, 1
 	Slider "Virtual Screen Vertical Position",			vr_overlayscreen_vpos,					-1.0, 1.0, 0.1, 1
 }
+
+OptionMenu "VRComfortControlsMenu" protected { Title "Comfort & Controls" }
+OptionMenu "VRHandsWeaponsMenu" protected { Title "Hands & Weapons" }
+OptionMenu "VRHudAutomapMenu" protected { Title "HUD & Automap" }
+OptionMenu "VRAdvancedMenu" protected { Title "Advanced" }
 
 OptionMenu "PostProcessMenu" protected
 {

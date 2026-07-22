@@ -3742,8 +3742,34 @@ void RTFrameBuffer::RT_BeginFrame()
         RG_CHECK( rt.rgSetOpenXRVirtualScreenSettingsEXT( &virtualScreenSettings ) );
     }
 
+    if( rt.rgSetOpenXRPresentationSettingsEXT )
+    {
+        const RgOpenXRPresentationSettingsEXT presentationSettings{
+            .structSize = sizeof( RgOpenXRPresentationSettingsEXT ),
+            .version = RG_OPENXR_PRESENTATION_EXT_VERSION,
+            .presentationMode = RG_OPENXR_PRESENTATION_MODE_VIRTUAL_SCREEN_EXT,
+            .mirrorMode = RG_OPENXR_MIRROR_MODE_LEFT_EYE_EXT,
+            .eyeRenderScale = 1.0f, .fovAdjustment = 0.0f, .eyeShiftMultiplier = 1.0f,
+            .requestSerial = 1,
+        };
+        RG_CHECK( rt.rgSetOpenXRPresentationSettingsEXT( &presentationSettings ) );
+    }
+
     RgResult r = rt.rgStartFrame( &info );
     RG_CHECK( r );
+    if( rt.rgGetOpenXRFrameStateEXT )
+    {
+        RgOpenXRFrameStateEXT xrFrameState{ .structSize = sizeof( RgOpenXRFrameStateEXT ), .version = RG_OPENXR_PRESENTATION_EXT_VERSION };
+        RG_CHECK( rt.rgGetOpenXRFrameStateEXT( &xrFrameState ) );
+        static uint32_t lastPresentationStatus = UINT32_MAX;
+        const uint32_t presentationStatus = ( uint32_t( xrFrameState.requestedPresentationMode ) << 24 ) | ( uint32_t( xrFrameState.activePresentationMode ) << 16 ) | ( uint32_t( xrFrameState.requestedMirrorMode ) << 8 ) | uint32_t( xrFrameState.fallbackReason );
+        if( presentationStatus != lastPresentationStatus )
+        {
+            lastPresentationStatus = presentationStatus;
+            if( xrFrameState.fallbackReason != RG_OPENXR_PRESENTATION_FALLBACK_NONE_EXT )
+                DPrintf( DMSG_NOTIFY, "RTGL OpenXR presentation fallback: requested mode %d, active mode %d, requested mirror %d, reason %d\n", int( xrFrameState.requestedPresentationMode ), int( xrFrameState.activePresentationMode ), int( xrFrameState.requestedMirrorMode ), int( xrFrameState.fallbackReason ) );
+        }
+    }
     RT_OpenXRInputPoll();
 
     auto l_clm = [ staticscene_status ]() {

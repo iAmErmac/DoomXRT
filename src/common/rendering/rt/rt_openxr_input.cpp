@@ -1,6 +1,5 @@
 #include "rt_openxr_input.h"
 #include "common/engine/d_eventbase.h"
-#include "common/engine/printf.h"
 #include "common/console/c_cvars.h"
 #include "common/console/keydef.h"
 #include "common/engine/m_joy.h"
@@ -21,7 +20,6 @@ GetSnapshot getSnapshot = nullptr;
 RgOpenXRInputSnapshotEXT previous{};
 bool snapTurnLatched = false;
 bool pointerHeld = false;
-bool loggedSnapshot = false;
 
 void PostKey(int key, bool down)
 {
@@ -108,7 +106,6 @@ void RT_OpenXRInputBindModule(
 #else
     getSnapshot = nullptr;
 #endif
-    Printf("RT OpenXR input: snapshot export %s\\n", getSnapshot ? "resolved" : "missing");
     RT_OpenXRInputReset();
 }
 
@@ -158,17 +155,6 @@ void RT_OpenXRInputPoll()
     current.structSize = sizeof(current);
     current.version = RG_OPENXR_INPUT_SNAPSHOT_EXT_VERSION;
     const RgResult snapshotResult = getSnapshot(&current);
-    const bool hasControllerActivity = current.left.stick.data[0] != 0.0f || current.left.stick.data[1] != 0.0f ||
-        current.right.stick.data[0] != 0.0f || current.right.stick.data[1] != 0.0f ||
-        current.left.trigger != 0.0f || current.right.trigger != 0.0f || current.left.grip != 0.0f || current.right.grip != 0.0f;
-    if (!loggedSnapshot || current.focused != previous.focused || current.capabilities != previous.capabilities || hasControllerActivity)
-    {
-        Printf("RT OpenXR input: result=%d size=%u version=%u session=%d focused=%d caps=%u left=(%.3f,%.3f) right=(%.3f,%.3f) trigger=(%.3f,%.3f) grip=(%.3f,%.3f) pose=(%d,%d)\n",
-            (int)snapshotResult, current.structSize, current.version, current.sessionRunning ? 1 : 0,
-            current.focused ? 1 : 0, current.capabilities, current.left.stick.data[0], current.left.stick.data[1],
-            current.right.stick.data[0], current.right.stick.data[1], current.left.trigger, current.right.trigger, current.left.grip, current.right.grip, current.left.pose.valid ? 1 : 0, current.right.pose.valid ? 1 : 0);
-        loggedSnapshot = true;
-    }
     if (snapshotResult != RG_RESULT_SUCCESS || current.structSize < sizeof(current) ||
         current.version != RG_OPENXR_INPUT_SNAPSHOT_EXT_VERSION ||
         !current.sessionRunning)
