@@ -356,6 +356,8 @@ DefaultOptionMenu
 OptionMenu "OptionsMenu" protected
 {
 	Title "$OPTMNU_TITLE"
+	Submenu "$VRPREFMNU_TITLE",			"VROptionsMenu"
+	StaticText " "
 	Submenu "$OPTMNU_CONTROLS",			"CustomizeControls"
 	Submenu "$OPTMNU_MOUSE",			"MouseOptions"
 	Submenu "$OPTMNU_JOYSTICK",			"JoystickOptions"
@@ -2577,12 +2579,18 @@ OptionValue "FuzzStyle"
 	//5, "$OPTVAL_JAGGEDFUZZ" I can't see any difference between this and 4 so it's disabled for now.
 }
 
-OptionValue VirtualScreenModes
+OptionValue CinemaScreenModes
 {
-	0, "Stationary Follow"
-	1, "Stationary"
-	2, "Stationary Follow"
-	3, "Head Follow"
+	0, "$VRPREFMNU_CINEMA_SCREEN_STATIONARY_FOLLOW"
+	1, "$VRPREFMNU_CINEMA_SCREEN_STATIONARY"
+	2, "$VRPREFMNU_CINEMA_SCREEN_STATIONARY_FOLLOW"
+	3, "$VRPREFMNU_CINEMA_SCREEN_HEAD_FOLLOW"
+}
+
+OptionValue VRPresentationModes
+{
+	0, "$VRPREFMNU_STEREO_PROJECTION"
+	1, "$VRPREFMNU_CINEMA_SCREEN"
 }
 
 OptionValue VRMode
@@ -2662,12 +2670,11 @@ OptionMenu "GLLightOptions" protected
 OptionMenu "OpenGLOptions" protected
 {
 	Title "$GLMNU_TITLE"
-	Submenu "$GLPREFMNU_VRMODE",				"VR3DMenu"
 	Submenu "$GLMNU_POSTPROCESS",				"PostProcessMenu"
 	StaticText " "
 	Option "$GLPREFMNU_SECLIGHTMODE",			gl_lightmode,					"LightingModes"
 	Option "$GLPREFMNU_SWLMBANDED",				gl_bandedswlight,				"OnOff"
-	Option "$GLPREFMNU_FOGMODE",				gl_fogmode,						"FogMode"
+	Option "$GLPREFMNU_FOGMODE",				gl_fogmode,					"FogMode"
 	Option "$GLPREFMNU_FOGFORCEFULLBRIGHT",		gl_brightfog,					"YesNo"
 	Slider "$GLPREFMNU_WPNLIGHTSTR",			gl_weaponlight,					0,32, 2
 	Option "$GLPREFMNU_ENVIRONMENTMAPMIRROR",	gl_mirror_envmap,				"OnOff"
@@ -2677,7 +2684,7 @@ OptionMenu "OpenGLOptions" protected
 	Option "$GLPREFMNU_SPRBLEND",				gl_sprite_blend,				"OnOff"
 	Option "$GLPREFMNU_FUZZSTYLE",				gl_fuzztype,					"FuzzStyle"
 	Option "$GLPREFMNU_SPRBILLBOARD",			gl_billboard_mode,				"BillboardModes"
-	Option "$GLPREFMNU_SPRBILLFACECAMERA",		gl_billboard_faces_camera,		"OnOff"
+	Option "$GLPREFMNU_SPRBILLFACECAMERA",	gl_billboard_faces_camera,		"OnOff"
 	Option "$GLPREFMNU_SPRBILLFACECAMERAFORCE",	hw_force_cambbpref,				"OnOff"
 	Option "$GLPREFMNU_PARTICLESTYLE",			gl_particles_style,				"Particles"
 	Option "$GLPREFMNU_RENDERQUALITY",			gl_seamless,					"Precision"
@@ -2688,38 +2695,61 @@ OptionMenu "OpenGLOptions" protected
 	Option "$GLPREFMNU_MULTISAMPLE", 			gl_multisample,					"Multisample"
 }
 
-OptionMenu "VR3DMenu" protected
+OptionMenu "VROptionsMenu" protected
 {
-	Title "$GLPREFMNU_VRMODE"
-	Submenu "$VRMNU_PRESENTATION", "VRPresentationMenu"
-	Submenu "$VRMNU_COMFORT_CONTROLS", "VRComfortControlsMenu"
-	Submenu "$VRMNU_HANDS_WEAPONS", "VRHandsWeaponsMenu"
-	Submenu "$VRMNU_HUD_AUTOMAP", "VRHudAutomapMenu"
-	Submenu "$VRMNU_ADVANCED", "VRAdvancedMenu"
+	Title "$VRPREFMNU_TITLE"
+
+	Submenu "$VRPREFMNU_PRESENTATION", "VRPresentationMenu"
+	Submenu "$VRPREFMNU_CINEMA_SCREEN", "VRCinemaScreenMenu"
+	Submenu "$VRPREFMNU_RAYTRACING_PERF", "VRRayTracingPerfMenu"
+
+	StaticText " "
+
+	StaticText "$VRPREFMNU_PLANNED", 1
+	StaticText "$VRPREFMNU_PLANNED_MIRROR", 1
+	StaticText "$VRPREFMNU_PLANNED_MULTIVIEW", 1
+	StaticText "$VRPREFMNU_PLANNED_LOCOMOTION", 1
+	StaticText "$VRPREFMNU_PLANNED_SAMPLING", 1
 }
 
 OptionMenu "VRPresentationMenu" protected
 {
-	Title "$VRMNU_PRESENTATION"
-	Option "$GLMNU_3DMODE",					vr_mode, 						"VRMode"
-	IfOption(Windows)
-	{
-		Option "$GLPREFMNU_VRQUADSTEREO",			vr_enable_quadbuffered,			"OnOff"
-	}
-	Slider "$GLPREFMNU_VRIPD",					vr_ipd,							0.041, 0.073, 0.001, 3
-	Slider "$GLPREFMNU_VRSCREENDIST",			vr_screendist,					0.2, 10.0, 0.1, 1
-	Option "Virtual Screen Mode",					vr_overlayscreen,					"VirtualScreenModes"
-	Command "Recenter Virtual Screen",	"vr_recenter_virtual_screen"
-	Option "Virtual Screen Always",					vr_overlayscreen_always,				"OnOff"
-	Slider "Virtual Screen Size",					vr_overlayscreen_size,					0.5, 2.0, 0.1, 1
-	Slider "Virtual Screen Distance",					vr_overlayscreen_dist,					0.0, 10.0, 0.1, 1
-	Slider "Virtual Screen Vertical Position",			vr_overlayscreen_vpos,					-1.0, 1.0, 0.1, 1
+	Title "$VRPREFMNU_PRESENTATION"
+	Option "$VRPREFMNU_OPENXR_PRESENTATION", vr_rt_openxr_presentation, "VRPresentationModes"
+	Option "$VRPREFMNU_SWAP_EYES", vr_swap_eyes, "OnOff"
+	Slider "$VRPREFMNU_OPENXR_RENDER_SCALE", vr_openxr_render_scale, 0.25, 2.0, 0.05, 2
+	Slider "$VRPREFMNU_OPENXR_FOV_ADJUST", vr_openxr_fov_adjust_deg, -90.0, 90.0, 1.0, 0
+	Slider "$VRPREFMNU_OPENXR_EYE_SHIFT", vr_openxr_eye_shift_scale, 0.0, 4.0, 0.05, 2
+	Slider "$VRPREFMNU_WORLD_SCALE", vr_hunits_per_meter, 1.0, 200.0, 1.0, 0
+	StaticText " "
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_rt_openxr_presentation vr_swap_eyes vr_openxr_render_scale vr_openxr_fov_adjust_deg vr_openxr_eye_shift_scale vr_hunits_per_meter"
 }
 
-OptionMenu "VRComfortControlsMenu" protected { Title "Comfort & Controls" }
-OptionMenu "VRHandsWeaponsMenu" protected { Title "Hands & Weapons" }
-OptionMenu "VRHudAutomapMenu" protected { Title "HUD & Automap" }
-OptionMenu "VRAdvancedMenu" protected { Title "Advanced" }
+OptionMenu "VRCinemaScreenMenu" protected
+{
+	Title "$VRPREFMNU_CINEMA_SCREEN"
+	Option "$VRPREFMNU_CINEMA_SCREEN_MODE", vr_overlayscreen, "CinemaScreenModes"
+	Command "$VRPREFMNU_CINEMA_SCREEN_RECENTER", "vr_recenter_virtual_screen"
+	Option "$VRPREFMNU_CINEMA_SCREEN_ALWAYS", vr_overlayscreen_always, "OnOff"
+	Slider "$VRPREFMNU_CINEMA_SCREEN_SIZE", vr_overlayscreen_size, 0.5, 2.0, 0.1, 1
+	Slider "$VRPREFMNU_CINEMA_SCREEN_DISTANCE", vr_overlayscreen_dist, 0.0, 10.0, 0.1, 1
+	Slider "$VRPREFMNU_CINEMA_SCREEN_VPOS", vr_overlayscreen_vpos, -1.0, 1.0, 0.1, 1
+	Slider "$VRPREFMNU_CINEMA_SCREEN_VIEWER_DIST", vr_screendist, 0.2, 10.0, 0.1, 1
+	StaticText " "
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_overlayscreen vr_overlayscreen_always vr_overlayscreen_size vr_overlayscreen_dist vr_overlayscreen_vpos vr_screendist"
+}
+
+OptionMenu "VRRayTracingPerfMenu" protected
+{
+	Title "$VRPREFMNU_RAYTRACING_PERF"
+	Slider "$VRPREFMNU_RT_RENDER_SCALE", vr_rt_render_scale, 0.25, 2.0, 0.05, 2
+	Slider "$VRPREFMNU_RT_REFLECTION_DEPTH", vr_rt_reflection_depth, 0, 8, 1, 0
+	Slider "$VRPREFMNU_RT_MIN_ROUGHNESS", vr_rt_min_reflection_roughness, 0.0, 1.0, 0.01, 2
+	Option "$VRPREFMNU_RT_INDIRECT_SECOND_BOUNCE", vr_rt_indirect_second_bounce, "OnOff"
+	Slider "$VRPREFMNU_SHADOW_RAY_DEPTH", rt_shadowrays, 1, 4, 1, 0
+	StaticText " "
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_rt_render_scale vr_rt_reflection_depth vr_rt_min_reflection_roughness vr_rt_indirect_second_bounce rt_shadowrays"
+}
 
 OptionMenu "PostProcessMenu" protected
 {

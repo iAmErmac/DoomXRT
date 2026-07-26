@@ -78,11 +78,6 @@ EXTERN_CVAR( Bool, vr_overlayscreen_always )
 EXTERN_CVAR( Float, vr_overlayscreen_size )
 EXTERN_CVAR( Float, vr_overlayscreen_dist )
 EXTERN_CVAR( Float, vr_overlayscreen_vpos )
-EXTERN_CVAR( Int, vr_rt_openxr_presentation )
-EXTERN_CVAR( Int, vr_desktop_view )
-EXTERN_CVAR( Float, vr_openxr_render_scale )
-EXTERN_CVAR( Float, vr_openxr_fov_adjust_deg )
-EXTERN_CVAR( Float, vr_openxr_eye_shift_scale )
 EXTERN_CVAR( Float, vr_hunits_per_meter )
 EXTERN_CVAR( Float, vr_ipd )
 EXTERN_CVAR( Bool, vr_swap_eyes )
@@ -144,6 +139,16 @@ bool g_rtOpenXRRecenterValid = false;
 }
 namespace cvar
 {
+    EXTERN_CVAR( Int, vr_rt_openxr_presentation )
+    EXTERN_CVAR( Int, vr_desktop_view )
+    EXTERN_CVAR( Float, vr_openxr_render_scale )
+    EXTERN_CVAR( Float, vr_openxr_fov_adjust_deg )
+    EXTERN_CVAR( Float, vr_openxr_eye_shift_scale )
+    EXTERN_CVAR( Float, vr_rt_render_scale )
+    EXTERN_CVAR( Int, vr_rt_reflection_depth )
+    EXTERN_CVAR( Float, vr_rt_min_reflection_roughness )
+    EXTERN_CVAR( Bool, vr_rt_indirect_second_bounce )
+
     // NOTE: if name start with '_' then the cvar won't be archived
 
     RT_CVAR( rt_cpu_cullmode,           0,      "[IMPACTS CPU PERFORMANCE HEAVILY] 0: BSP + all neighbor sectors of visible,  1 - original GZDoom's BSP/clip checks,  2: uploading whole map, no culling at all" )
@@ -319,6 +324,7 @@ namespace cvar
 
     bool rt_firststart = false;
 }
+using namespace cvar;
 // clang-format on
 
 EXTERN_CVAR( Float, blood_fade_scalar );
@@ -895,9 +901,8 @@ class RTRenderState;
 namespace
 {
 
-// RTGL1 owns the native OpenXR session for this framebuffer. Querying VRMode here
-// would initialize DoomXRMode's Vulkan compositor path; the resolved startup state
-// is therefore the sole authority and falls back to flatscreen on failure.
+// Use the resolved startup state here instead of initializing the compositor path,
+// which requires a framebuffer-backed Vulkan device.
 bool RT_IsNativeOpenXRResolvedForStartup()
 {
     return V_IsOpenXRResolvedForStartup();
@@ -918,9 +923,9 @@ RTEffectiveSettings RT_GetEffectiveSettings()
     const auto settings     = RTEffectiveSettings{
         .preferDxgiPresent       = nativeOpenXR ? false : ( cvar::rt_available_dxgi ? bool{ cvar::rt_dxgi } : false ),
         .forceFrameGenerationOff = nativeOpenXR,
-        .renderScale             = nativeOpenXR ? 0.75f : float{ cvar::rt_renderscale },
-        .maxReflectRefractDepth  = nativeOpenXR ? 2 : int{ cvar::rt_reflrefr_depth },
-        .minRoughness            = nativeOpenXR ? 0.20f : float{ cvar::rt_refl_thresh },
+        .renderScale             = nativeOpenXR ? float{ cvar::vr_rt_render_scale } : float{ cvar::rt_renderscale },
+        .maxReflectRefractDepth  = nativeOpenXR ? int{ cvar::vr_rt_reflection_depth } : int{ cvar::rt_reflrefr_depth },
+        .minRoughness            = nativeOpenXR ? float{ cvar::vr_rt_min_reflection_roughness } : float{ cvar::rt_refl_thresh },
     };
 
     static bool wasNativeOpenXR = false;
@@ -2636,9 +2641,8 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
     rt = RgInterface{};
 
     bool nativeOpenXR = V_IsOpenXRResolvedForStartup();
-    // RTGL1 owns native XR creation and presentation. Use the resolved
-    // startup state here instead of DoomXRMode, whose Vulkan compositor requires
-    // a VulkanRenderDevice that the RT framebuffer intentionally does not have.
+    // Use the resolved startup state instead of the layered compositor path,
+    // which requires a framebuffer-backed Vulkan device.
     if( nativeOpenXR && g_isremix )
     {
         V_FallbackOpenXRStartup( "RTGL1 OpenXR initialization failed", "RTX Remix does not implement the native RTGL1 OpenXR bridge" );
@@ -4060,11 +4064,12 @@ void RTFrameBuffer::RT_DrawFrame()
         .lensDirtIntensity = cvar::rt_bloom_dirt ? dirtscale : 0.f,
     };
 
+    const bool nativeOpenXR = RT_IsNativeOpenXRResolvedForStartup();
     auto illum_params = RgDrawFrameIlluminationParams{
         .sType                              = RG_STRUCTURE_TYPE_DRAW_FRAME_ILLUMINATION_PARAMS,
         .pNext                              = &bloom_params,
         .maxBounceShadows                   = safe_uint( *cvar::rt_shadowrays ),
-        .enableSecondBounceForIndirect      = true,
+        .enableSecondBounceForIndirect      = nativeOpenXR ? bool{ cvar::vr_rt_indirect_second_bounce } : true,
         .cellWorldSize                      = 2.0f,
         .directDiffuseSensitivityToChange   = 1.0f,
         .indirectDiffuseSensitivityToChange = 0.75f,

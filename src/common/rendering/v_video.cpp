@@ -47,6 +47,7 @@
 #include "v_video.h"
 #include "v_text.h"
 #include "sc_man.h"
+#include "common/rendering/stereo3d/openxr/oxr_loader.h"
 
 #include "filesystem.h"
 #include "c_dispatch.h"
@@ -211,15 +212,6 @@ namespace
 	}
 }
 
-static bool WantsOpenXRBackend()
-{
-#if !defined(HAVE_VULKAN)
-	return false;
-#else
-	return GetRequestedVrMode() == 15;
-#endif
-}
-
 void V_ResolveStartupRendererIntent()
 {
 	if (gVRStartupIntent.resolved)
@@ -230,11 +222,6 @@ void V_ResolveStartupRendererIntent()
 	gVRStartupIntent.requestedVrMode = GetRequestedVrMode();
 	gVRStartupIntent.requestedOpenXR = gVRStartupIntent.requestedVrMode == 15;
 	gVRStartupIntent.requestedBackend = ClampBackendPreference(vid_preferbackend);
-	if (gVRStartupIntent.requestedOpenXR)
-	{
-		gVRStartupIntent.requestedBackend = 1;
-	}
-
 	gVRStartupIntent.resolvedVrMode = gVRStartupIntent.requestedVrMode;
 	gVRStartupIntent.resolvedBackend = gVRStartupIntent.requestedBackend;
 	gVRStartupIntent.resolvedOpenXR = gVRStartupIntent.requestedOpenXR;
@@ -242,6 +229,19 @@ void V_ResolveStartupRendererIntent()
 	if (gVRStartupIntent.resolvedOpenXR)
 	{
 		gVRStartupIntent.resolvedBackend = 1;
+		if (!IsOpenXRRuntimePresent())
+		{
+			const std::string error = GetLastOpenXRError();
+			Printf("OpenXR startup unavailable for vr_mode 15; falling back to vr_mode 0: %s\n",
+				error.empty() ? "no compatible OpenXR runtime" : error.c_str());
+
+			vr_mode = 0;
+			gVRStartupIntent.resolvedVrMode = 0;
+			gVRStartupIntent.resolvedBackend = gVRStartupIntent.requestedBackend;
+			gVRStartupIntent.resolvedOpenXR = false;
+			gVRStartupIntent.resolvedVirtualScreen = false;
+			gVRStartupIntent.fallbackLogged = true;
+		}
 	}
 
 	Printf("VR startup request: vr_mode=%d backend=%s\n",
@@ -288,11 +288,7 @@ bool V_FallbackOpenXRStartup(const char* failureStage, const char* reason)
 int V_GetBackend()
 {
 	V_ResolveStartupRendererIntent();
-	if (WantsOpenXRBackend())
-	{
-		return 1;
-	}
-	return ClampBackendPreference(vid_preferbackend);
+	return gVRStartupIntent.resolvedBackend;
 }
 CUSTOM_CVAR(Int, uiscale, 0, CVAR_ARCHIVE | CVAR_NOINITCALL)
 {

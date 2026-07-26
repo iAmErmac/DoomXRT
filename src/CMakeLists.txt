@@ -1313,6 +1313,7 @@ target_compile_definitions( zdoom PRIVATE HAVE_RT=1 )
 target_include_directories( zdoom PRIVATE ${CMAKE_BINARY_DIR} )
 
 if( HAVE_RT )
+
 	if( RTGL1_SDK_PATH )
 		include_directories( "${RTGL1_SDK_PATH}/Include" )
 		# VS hot reload
@@ -1330,7 +1331,9 @@ if( HAVE_RT )
 					"$<TARGET_FILE_DIR:zdoom>/rt/bin/RTGL1.dll"
 				COMMAND ${CMAKE_COMMAND} -E copy_if_different
 					$<IF:$<CONFIG:Debug>,${RTGL1_SDK_PATH}/Build/bin/debug/RTGL1.dll,${RTGL1_SDK_PATH}/Build/bin/RTGL1.dll>
-					"$<TARGET_FILE_DIR:zdoom>/rt/bin/debug/RTGL1.dll"
+					"$<TARGET_FILE_DIR:zdoom>/rt/bin/debug/RTGL1.dll"				COMMAND ${CMAKE_COMMAND} -E copy_directory
+					"${CMAKE_SOURCE_DIR}/rt-overrides"
+					"$<TARGET_FILE_DIR:zdoom>/rt-overrides"
 				COMMENT "Copying RTGL1.dll..."
 			)
 		endif()

@@ -2031,6 +2031,14 @@ static void GetCmdLineFiles(std::vector<std::string>& wadfiles)
 		I_FatalError("Can't find RT runtime wad directory: %s", rtWad);
 	}
 	D_AddWildFile(wadfiles, rtWad, nullptr /* ignored */, GameConfig);
+
+	FString rtMenuOverlay;
+	rtMenuOverlay.Format("%s%srt-overrides/wad", progdir.GetChars(),
+		progdir.Back() == '/' || progdir.Back() == '\\' ? "" : "/" );
+	if (DirEntryExists(rtMenuOverlay.GetChars()))
+	{
+		D_AddWildFile(wadfiles, rtMenuOverlay.GetChars(), nullptr /* ignored */, GameConfig);
+	}
 #endif
 }
 
