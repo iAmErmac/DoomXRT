@@ -63,6 +63,14 @@ CVAR(Float, vr_overlayscreen_size, 1.0f, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
 CVAR(Float, vr_overlayscreen_dist, 0.0f, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
 CVAR(Float, vr_overlayscreen_vpos, 0.0f, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
 
+// RTGL native OpenXR stereo presentation controls. These are kept with the
+// common VR cvars so they are available before RTGL starts.
+CVAR(Int, vr_rt_openxr_presentation, 0, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
+CVAR(Int, vr_desktop_view, 1, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
+CVAR(Float, vr_openxr_render_scale, 1.0f, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
+CVAR(Float, vr_openxr_fov_adjust_deg, 0.0f, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
+CVAR(Float, vr_openxr_eye_shift_scale, 1.0f, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
+
 uint64_t g_vr_virtual_screen_recenter_request = 0;
 
 CCMD(vr_recenter_virtual_screen)

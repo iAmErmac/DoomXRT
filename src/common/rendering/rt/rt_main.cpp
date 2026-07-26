@@ -78,6 +78,14 @@ EXTERN_CVAR( Bool, vr_overlayscreen_always )
 EXTERN_CVAR( Float, vr_overlayscreen_size )
 EXTERN_CVAR( Float, vr_overlayscreen_dist )
 EXTERN_CVAR( Float, vr_overlayscreen_vpos )
+EXTERN_CVAR( Int, vr_rt_openxr_presentation )
+EXTERN_CVAR( Int, vr_desktop_view )
+EXTERN_CVAR( Float, vr_openxr_render_scale )
+EXTERN_CVAR( Float, vr_openxr_fov_adjust_deg )
+EXTERN_CVAR( Float, vr_openxr_eye_shift_scale )
+EXTERN_CVAR( Float, vr_hunits_per_meter )
+EXTERN_CVAR( Float, vr_ipd )
+EXTERN_CVAR( Bool, vr_swap_eyes )
 EXTERN_CVAR( Float, vr_snapTurn )
 EXTERN_CVAR( Bool, vr_switch_sticks )
 
@@ -126,6 +134,14 @@ constexpr ECVarType ValueToCVarType =
 
 
 // clang-format off
+namespace
+{
+RgOpenXRFrameStateEXT g_rtOpenXRFrameState{ .structSize = sizeof( RgOpenXRFrameStateEXT ), .version = RG_OPENXR_PRESENTATION_EXT_VERSION };
+bool g_rtOpenXRFrameStateValid = false;
+RgFloat3D g_rtOpenXRRecenterPosition{};
+RgQuaternion g_rtOpenXRRecenterOrientation{{ 0.0f, 0.0f, 0.0f, 1.0f }};
+bool g_rtOpenXRRecenterValid = false;
+}
 namespace cvar
 {
     // NOTE: if name start with '_' then the cvar won't be archived
@@ -880,7 +896,7 @@ namespace
 {
 
 // RTGL1 owns the native OpenXR session for this framebuffer. Querying VRMode here
-// would initialize DoomXRMode's Vulkan compositor path; Phase 1's resolved state
+// would initialize DoomXRMode's Vulkan compositor path; the resolved startup state
 // is therefore the sole authority and falls back to flatscreen on failure.
 bool RT_IsNativeOpenXRResolvedForStartup()
 {
@@ -2076,7 +2092,8 @@ private:
         auto makePrimFlags = [ this, &verts, forceLavaFloorTexture ]( bool isUI ) -> RgMeshPrimitiveFlags {
             if( isUI )
             {
-                return RG_MESH_PRIMITIVE_TRANSLUCENT;
+                return RG_MESH_PRIMITIVE_TRANSLUCENT | RG_MESH_PRIMITIVE_HUD |
+                       ( rtstate.is< RtPrim::FirstPerson >() ? RG_MESH_PRIMITIVE_FIRST_PERSON : 0 );
             }
             if( rtstate.is< RtPrim::Decal >() )
             {
@@ -2225,6 +2242,86 @@ public:
 
         RgResult r = rt.rgUploadCamera( &info );
         RG_CHECK( r );
+
+        if( rt.rgUploadStereoCameraEXT && g_rtOpenXRFrameStateValid &&
+            g_rtOpenXRFrameState.requestedPresentationMode == RG_OPENXR_PRESENTATION_MODE_STEREO_PROJECTION_EXT &&
+            g_rtOpenXRFrameState.eyes[ 0 ].pose.valid && g_rtOpenXRFrameState.eyes[ 1 ].pose.valid &&
+            g_rtOpenXRFrameState.headPose.valid )
+        {
+            if( !g_rtOpenXRRecenterValid )
+            {
+                g_rtOpenXRRecenterPosition = g_rtOpenXRFrameState.headPose.position;
+                g_rtOpenXRRecenterOrientation = g_rtOpenXRFrameState.headPose.orientation;
+                g_rtOpenXRRecenterValid = true;
+            }
+
+            const auto quaternionMultiply = []( const RgQuaternion& a, const RgQuaternion& b ) {
+                return RgQuaternion{{
+                    a.data[ 3 ] * b.data[ 0 ] + a.data[ 0 ] * b.data[ 3 ] + a.data[ 1 ] * b.data[ 2 ] - a.data[ 2 ] * b.data[ 1 ],
+                    a.data[ 3 ] * b.data[ 1 ] - a.data[ 0 ] * b.data[ 2 ] + a.data[ 1 ] * b.data[ 3 ] + a.data[ 2 ] * b.data[ 0 ],
+                    a.data[ 3 ] * b.data[ 2 ] + a.data[ 0 ] * b.data[ 1 ] - a.data[ 1 ] * b.data[ 0 ] + a.data[ 2 ] * b.data[ 3 ],
+                    a.data[ 3 ] * b.data[ 3 ] - a.data[ 0 ] * b.data[ 0 ] - a.data[ 1 ] * b.data[ 1 ] - a.data[ 2 ] * b.data[ 2 ],
+                }};
+            };
+            const auto quaternionRotate = [ & ]( const RgQuaternion& q, const RgFloat3D& v ) {
+                const auto qv = RgQuaternion{{ v.data[ 0 ], v.data[ 1 ], v.data[ 2 ], 0.0f }};
+                const auto inverse = RgQuaternion{{ -q.data[ 0 ], -q.data[ 1 ], -q.data[ 2 ], q.data[ 3 ] }};
+                const auto rotated = quaternionMultiply( quaternionMultiply( q, qv ), inverse );
+                return RgFloat3D{{ rotated.data[ 0 ], rotated.data[ 1 ], rotated.data[ 2 ] }};
+            };
+            const auto recenterInverse = RgQuaternion{{ -g_rtOpenXRRecenterOrientation.data[ 0 ], -g_rtOpenXRRecenterOrientation.data[ 1 ], -g_rtOpenXRRecenterOrientation.data[ 2 ], g_rtOpenXRRecenterOrientation.data[ 3 ] }};
+            const auto headOrientation = quaternionMultiply( recenterInverse, g_rtOpenXRFrameState.headPose.orientation );
+            const auto mapToWorld = [ & ]( const RgFloat3D& local ) {
+                return RgFloat3D{{
+                    right.data[ 0 ] * local.data[ 0 ] + up.data[ 0 ] * local.data[ 1 ] - forward.data[ 0 ] * local.data[ 2 ],
+                    right.data[ 1 ] * local.data[ 0 ] + up.data[ 1 ] * local.data[ 1 ] - forward.data[ 1 ] * local.data[ 2 ],
+                    right.data[ 2 ] * local.data[ 0 ] + up.data[ 2 ] * local.data[ 1 ] - forward.data[ 2 ] * local.data[ 2 ],
+                }};
+            };
+            const auto mapTracking = [ & ]( const RgFloat3D& trackingVector ) {
+                return mapToWorld( quaternionRotate( recenterInverse, trackingVector ) );
+            };
+            const float worldUnitsPerMeter = std::max( float( vr_hunits_per_meter ) * float( ONEGAMEUNIT_IN_METERS ), 0.001f );
+            const RgFloat3D headTranslation{{
+                (g_rtOpenXRFrameState.headPose.position.data[ 0 ] - g_rtOpenXRRecenterPosition.data[ 0 ]) * worldUnitsPerMeter,
+                (g_rtOpenXRFrameState.headPose.position.data[ 1 ] - g_rtOpenXRRecenterPosition.data[ 1 ]) * worldUnitsPerMeter,
+                (g_rtOpenXRFrameState.headPose.position.data[ 2 ] - g_rtOpenXRRecenterPosition.data[ 2 ]) * worldUnitsPerMeter,
+            }};
+            const RgFloat3D trackedRight = mapToWorld( quaternionRotate( headOrientation, RgFloat3D{{ 1.0f, 0.0f, 0.0f }} ) );
+            const RgFloat3D trackedUp = mapToWorld( quaternionRotate( headOrientation, RgFloat3D{{ 0.0f, 1.0f, 0.0f }} ) );
+
+            std::array< float, 16 > eyeProjections[ 2 ]{};
+            auto stereo = RgStereoCameraInfoEXT{
+                .structSize = sizeof( RgStereoCameraInfoEXT ),
+                .version = RG_OPENXR_PRESENTATION_EXT_VERSION,
+                .left = info,
+                .right = info,
+            };
+            const auto makeEye = [ & ]( const RgOpenXREyeFrameStateEXT& eye, std::array< float, 16 >& projection ) {
+                const float eyeShiftMultiplier = std::clamp( float( vr_openxr_eye_shift_scale ), 0.0f, 4.0f );
+                const auto eyeOffset = RgFloat3D{{
+                    eye.pose.position.data[ 0 ] - g_rtOpenXRFrameState.headPose.position.data[ 0 ],
+                    eye.pose.position.data[ 1 ] - g_rtOpenXRFrameState.headPose.position.data[ 1 ],
+                    eye.pose.position.data[ 2 ] - g_rtOpenXRFrameState.headPose.position.data[ 2 ],
+                }};
+                const auto worldHeadTranslation = mapTracking( headTranslation );
+                const auto worldEyeOffset = mapTracking( eyeOffset );
+                auto result = info;
+                result.position.data[ 0 ] += worldHeadTranslation.data[ 0 ] + worldEyeOffset.data[ 0 ] * worldUnitsPerMeter * eyeShiftMultiplier;
+                result.position.data[ 1 ] += worldHeadTranslation.data[ 1 ] + worldEyeOffset.data[ 1 ] * worldUnitsPerMeter * eyeShiftMultiplier;
+                result.position.data[ 2 ] += worldHeadTranslation.data[ 2 ] + worldEyeOffset.data[ 2 ] * worldUnitsPerMeter * eyeShiftMultiplier;
+                result.right = trackedRight;
+                result.up = trackedUp;
+                std::memcpy( projection.data(), eye.projection, sizeof( eye.projection ) );
+                result.pProjection = projection.data();
+                return result;
+            };
+            const auto& leftEye = g_rtOpenXRFrameState.eyes[ vr_swap_eyes ? 1 : 0 ];
+            const auto& rightEye = g_rtOpenXRFrameState.eyes[ vr_swap_eyes ? 0 : 1 ];
+            stereo.left = makeEye( leftEye, eyeProjections[ 0 ] );
+            stereo.right = makeEye( rightEye, eyeProjections[ 1 ] );
+            RG_CHECK( rt.rgUploadStereoCameraEXT( &stereo ) );
+        }
 
 
         // for first-person weapons
@@ -2539,7 +2636,7 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
     rt = RgInterface{};
 
     bool nativeOpenXR = V_IsOpenXRResolvedForStartup();
-    // RTGL1 owns native XR creation and presentation. Use Phase 1's resolved
+    // RTGL1 owns native XR creation and presentation. Use the resolved
     // startup state here instead of DoomXRMode, whose Vulkan compositor requires
     // a VulkanRenderDevice that the RT framebuffer intentionally does not have.
     if( nativeOpenXR && g_isremix )
@@ -3744,14 +3841,37 @@ void RTFrameBuffer::RT_BeginFrame()
 
     if( rt.rgSetOpenXRPresentationSettingsEXT )
     {
-        const RgOpenXRPresentationSettingsEXT presentationSettings{
+        const auto requestedPresentation = vr_rt_openxr_presentation == 1 || menuactive != MENU_Off
+            ? RG_OPENXR_PRESENTATION_MODE_VIRTUAL_SCREEN_EXT
+            : RG_OPENXR_PRESENTATION_MODE_STEREO_PROJECTION_EXT;
+        const auto requestedMirror = vr_desktop_view == -1 ? RG_OPENXR_MIRROR_MODE_OFF_EXT
+            : vr_desktop_view == 0 ? RG_OPENXR_MIRROR_MODE_SIDE_BY_SIDE_EXT
+            : vr_desktop_view == 2 ? RG_OPENXR_MIRROR_MODE_RIGHT_EYE_EXT
+            : RG_OPENXR_MIRROR_MODE_LEFT_EYE_EXT;
+        static uint64_t requestSerial = 0;
+        static bool haveLastRequest = false;
+        static RgOpenXRPresentationSettingsEXT lastRequest{};
+        RgOpenXRPresentationSettingsEXT presentationSettings{
             .structSize = sizeof( RgOpenXRPresentationSettingsEXT ),
             .version = RG_OPENXR_PRESENTATION_EXT_VERSION,
-            .presentationMode = RG_OPENXR_PRESENTATION_MODE_VIRTUAL_SCREEN_EXT,
-            .mirrorMode = RG_OPENXR_MIRROR_MODE_LEFT_EYE_EXT,
-            .eyeRenderScale = 1.0f, .fovAdjustment = 0.0f, .eyeShiftMultiplier = 1.0f,
-            .requestSerial = 1,
+            .presentationMode = requestedPresentation,
+            .mirrorMode = requestedMirror,
+            .eyeRenderScale = std::clamp( float( vr_openxr_render_scale ), 0.25f, 2.0f ),
+            .fovAdjustment = float( vr_openxr_fov_adjust_deg ),
+            .eyeShiftMultiplier = std::clamp( float( vr_openxr_eye_shift_scale ), 0.0f, 4.0f ),
         };
+        if( !haveLastRequest ||
+            lastRequest.presentationMode != presentationSettings.presentationMode ||
+            lastRequest.mirrorMode != presentationSettings.mirrorMode ||
+            lastRequest.eyeRenderScale != presentationSettings.eyeRenderScale ||
+            lastRequest.fovAdjustment != presentationSettings.fovAdjustment ||
+            lastRequest.eyeShiftMultiplier != presentationSettings.eyeShiftMultiplier )
+        {
+            ++requestSerial;
+            lastRequest = presentationSettings;
+            haveLastRequest = true;
+        }
+        presentationSettings.requestSerial = requestSerial;
         RG_CHECK( rt.rgSetOpenXRPresentationSettingsEXT( &presentationSettings ) );
     }
 
@@ -3761,6 +3881,10 @@ void RTFrameBuffer::RT_BeginFrame()
     {
         RgOpenXRFrameStateEXT xrFrameState{ .structSize = sizeof( RgOpenXRFrameStateEXT ), .version = RG_OPENXR_PRESENTATION_EXT_VERSION };
         RG_CHECK( rt.rgGetOpenXRFrameStateEXT( &xrFrameState ) );
+        g_rtOpenXRFrameState = xrFrameState;
+        g_rtOpenXRFrameStateValid = xrFrameState.frameValid && xrFrameState.sessionRunning;
+        if( !g_rtOpenXRFrameStateValid || xrFrameState.requestedPresentationMode != RG_OPENXR_PRESENTATION_MODE_STEREO_PROJECTION_EXT ) g_rtOpenXRRecenterValid = false;
+
         static uint32_t lastPresentationStatus = UINT32_MAX;
         const uint32_t presentationStatus = ( uint32_t( xrFrameState.requestedPresentationMode ) << 24 ) | ( uint32_t( xrFrameState.activePresentationMode ) << 16 ) | ( uint32_t( xrFrameState.requestedMirrorMode ) << 8 ) | uint32_t( xrFrameState.fallbackReason );
         if( presentationStatus != lastPresentationStatus )
@@ -3770,6 +3894,8 @@ void RTFrameBuffer::RT_BeginFrame()
                 DPrintf( DMSG_NOTIFY, "RTGL OpenXR presentation fallback: requested mode %d, active mode %d, requested mirror %d, reason %d\n", int( xrFrameState.requestedPresentationMode ), int( xrFrameState.activePresentationMode ), int( xrFrameState.requestedMirrorMode ), int( xrFrameState.fallbackReason ) );
         }
     }
+    if( !rt.rgGetOpenXRFrameStateEXT ) g_rtOpenXRFrameStateValid = false;
+
     RT_OpenXRInputPoll();
 
     auto l_clm = [ staticscene_status ]() {
