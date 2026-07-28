@@ -11,6 +11,7 @@
 #include <cmath>
 
 EXTERN_CVAR(Bool, vr_switch_sticks)
+EXTERN_CVAR(Bool, vr_move_use_offhand)
 EXTERN_CVAR(Float, vr_snapTurn)
 
 namespace
@@ -20,6 +21,35 @@ GetSnapshot getSnapshot = nullptr;
 RgOpenXRInputSnapshotEXT previous{};
 bool snapTurnLatched = false;
 bool pointerHeld = false;
+float configuredDead[4] = { .25f,.25f,.25f,.25f };
+float configuredScale[4] = { 1,1,1,1 };
+EJoyAxis configuredMap[4] = { JOYAXIS_Side, JOYAXIS_Forward, JOYAXIS_None, JOYAXIS_None };
+float configuredSensitivity = 1.0f;
+float pendingViewYawDeltaDegrees = 0.0f;
+float turnRate = 0.0f;
+
+RgFloat2D FilterMovementStick(const RgFloat2D& stick)
+{
+	constexpr float deadZone = 0.10f;
+	constexpr float power = 2.2f;
+	const float length = std::sqrt(stick.data[0] * stick.data[0] + stick.data[1] * stick.data[1]);
+	if (length <= deadZone)
+	{
+		return {{ 0.0f, 0.0f }};
+	}
+
+	const float filteredLength = std::pow((length - deadZone) / (1.0f - deadZone), power);
+	const float divisor = std::max(length, 1.0f);
+	RgFloat2D result{{ filteredLength * stick.data[0] / divisor, filteredLength * stick.data[1] / divisor }};
+	if (std::fabs(result.data[0]) + std::fabs(result.data[1]) <= 0.05f)
+	{
+		result = {{ 0.0f, 0.0f }};
+	}
+	return result;
+}
+
+int64_t previousFrameTime = 0;
+bool MovementUsesRight() { return vr_switch_sticks != vr_move_use_offhand; }
 
 void PostKey(int key, bool down)
 {
@@ -78,17 +108,20 @@ void PollPointer(const RgOpenXRInputSnapshotEXT& current, const RgOpenXRInputSna
 void StickEdges(const RgFloat2D& stick, int right, int left, int down, int up,
                 RgFloat2D& old)
 {
-    constexpr float deadZone = 0.22f;
-    const bool r = stick.data[0] > deadZone;
-    const bool l = stick.data[0] < -deadZone;
-    const bool d = stick.data[1] < -deadZone;
-    const bool u = stick.data[1] > deadZone;
-    const bool orr = old.data[0] > deadZone;
-    const bool oll = old.data[0] < -deadZone;
-    const bool od = old.data[1] < -deadZone;
-    const bool ou = old.data[1] > deadZone;
-    if (r != orr) PostKey(right, r); if (l != oll) PostKey(left, l);
-    if (d != od) PostKey(down, d); if (u != ou) PostKey(up, u);
+    auto direction = [](const RgFloat2D& v) {
+        const float x = std::fabs(v.data[0]), y = std::fabs(v.data[1]);
+        const float xDeadZone = configuredDead[0];
+        const float yDeadZone = configuredDead[1];
+        const bool xActive = x > xDeadZone;
+        const bool yActive = y > yDeadZone;
+        const bool xDominant = xActive && (!yActive || x - y >= 0.15f);
+        const bool yDominant = yActive && (!xActive || y - x >= 0.15f);
+        if (xDominant) return v.data[0] > 0.0f ? 1 : -1;
+        if (yDominant) return v.data[1] < 0.0f ? 2 : 3;
+        return 0;
+    };
+    const int now = direction(stick), was = direction(old);
+    if (now != was) { if (was) PostKey(was==1?right:was==-1?left:was==2?down:up,false); if (now) PostKey(now==1?right:now==-1?left:now==2?down:up,true); }
     old = stick;
 }
 }
@@ -111,9 +144,10 @@ void RT_OpenXRInputBindModule(
 
 void ReleaseAll()
 {
-    const bool swap = vr_switch_sticks;
+    const bool swap = MovementUsesRight();
     const auto& move = swap ? previous.right.stick : previous.left.stick;
     const auto& turn = swap ? previous.left.stick : previous.right.stick;
+    pendingViewYawDeltaDegrees = 0.0f;
     const auto releaseStick = [](const RgFloat2D& stick, int right, int left, int down, int up) {
         constexpr float deadZone = 0.22f;
         if (stick.data[0] > deadZone) PostKey(right, false); if (stick.data[0] < -deadZone) PostKey(left, false);
@@ -126,6 +160,7 @@ void ReleaseAll()
     if (previous.right.faceA) PostKey(KEY_PAD_A, false); if (previous.right.faceB) PostKey(KEY_PAD_B, false);
     if (previous.left.faceX) PostKey(KEY_PAD_X, false); if (previous.left.faceY) PostKey(KEY_PAD_Y, false);
     if (previous.right.thumbClick) PostKey(KEY_PAD_RTHUMB, false);
+    if (previous.left.thumbClick) PostKey(KEY_PAD_LTHUMB, false);
     if (pointerHeld) { PostGui(EV_GUI_LButtonUp, 0, 0); pointerHeld = false; }
 }
 
@@ -134,19 +169,18 @@ void RT_OpenXRInputReset()
     ReleaseAll();
     previous = {};
     snapTurnLatched = false;
+    turnRate = 0.0f;
+    previousFrameTime = 0;
 }
 void RT_OpenXRInputAddAxes(float axes[])
 {
     if (!getSnapshot || !previous.sessionRunning || !previous.focused) return;
 
-    const auto& moveStick = vr_switch_sticks ? previous.right.stick : previous.left.stick;
-    const auto& turnStick = vr_switch_sticks ? previous.left.stick : previous.right.stick;
-    // Match XInput's axis convention: joystick sources subtract their values
-    // from the engine accumulator, and OpenXR's +Y is forward.
-    axes[JOYAXIS_Side] -= moveStick.data[0];
-    axes[JOYAXIS_Forward] += moveStick.data[1];
-    axes[JOYAXIS_Yaw] -= turnStick.data[0];
-    axes[JOYAXIS_Pitch] -= turnStick.data[1] * 0.75f;
+    const auto& moveStick = MovementUsesRight() ? previous.right.stick : previous.left.stick;
+    const auto& turnStick = MovementUsesRight() ? previous.left.stick : previous.right.stick;
+    const RgFloat2D filteredMove = FilterMovementStick(moveStick);
+    const float values[4] = { -filteredMove.data[0], filteredMove.data[1], turnStick.data[0], turnStick.data[1] };
+    for (int i=0; i<4; ++i) { float v=values[i], a=std::fabs(v); if (a <= configuredDead[i]) v=0; else v=(v>0?1:-1)*(a-configuredDead[i])/(1-configuredDead[i]); if (configuredMap[i] != JOYAXIS_None) axes[configuredMap[i]] += v*configuredScale[i]*configuredSensitivity; }
 }
 void RT_OpenXRInputPoll()
 {
@@ -162,24 +196,41 @@ void RT_OpenXRInputPoll()
         RT_OpenXRInputReset();
         return;
     }
-    const auto& moveStick = vr_switch_sticks ? current.right.stick : current.left.stick;
-    const auto& turnStick = vr_switch_sticks ? current.left.stick : current.right.stick;
+    const auto& moveStick = MovementUsesRight() ? current.right.stick : current.left.stick;
+    const auto& turnStick = MovementUsesRight() ? current.left.stick : current.right.stick;
     StickEdges(moveStick, KEY_PAD_LTHUMB_RIGHT, KEY_PAD_LTHUMB_LEFT,
-               KEY_PAD_LTHUMB_DOWN, KEY_PAD_LTHUMB_UP, vr_switch_sticks ? previous.right.stick : previous.left.stick);
+               KEY_PAD_LTHUMB_DOWN, KEY_PAD_LTHUMB_UP, MovementUsesRight() ? previous.right.stick : previous.left.stick);
     if (vr_snapTurn > 10.0f)
     {
-        const bool turnRight = turnStick.data[0] > 0.7f;
-        const bool turnLeft = turnStick.data[0] < -0.7f;
+        const bool turnRight = turnStick.data[0] > 0.60f;
+        const bool turnLeft = turnStick.data[0] < -0.60f;
         if (!snapTurnLatched && (turnRight || turnLeft))
         {
-            PostKey(turnRight ? KEY_PAD_RTHUMB_RIGHT : KEY_PAD_RTHUMB_LEFT, true);
-            PostKey(turnRight ? KEY_PAD_RTHUMB_RIGHT : KEY_PAD_RTHUMB_LEFT, false);
+            const float deltaDegrees = (turnRight ? -1.0f : 1.0f) * vr_snapTurn;
+            pendingViewYawDeltaDegrees -= deltaDegrees;
             snapTurnLatched = true;
         }
-        if (!turnRight && !turnLeft) snapTurnLatched = false;
+        if (turnStick.data[0] < 0.40f && turnStick.data[0] > -0.40f) snapTurnLatched = false;
     }
-    else    StickEdges(turnStick, KEY_PAD_RTHUMB_RIGHT, KEY_PAD_RTHUMB_LEFT,
-               KEY_PAD_RTHUMB_DOWN, KEY_PAD_RTHUMB_UP, vr_switch_sticks ? previous.left.stick : previous.right.stick);
+    else
+    {
+        const float dt = previousFrameTime ? std::clamp(float(current.frameTime - previousFrameTime) * 1.0e-9f, 0.0f, 0.1f) : 0.0f;
+        constexpr float deadZone = 0.10f, maxRate = 210.0f, response = 8.0f;
+        const float magnitude = std::fabs(turnStick.data[0]);
+        float targetRate = 0.0f;
+        if (magnitude > deadZone)
+        {
+            const float t = std::clamp((magnitude - deadZone) / (1.0f - deadZone), 0.0f, 1.0f);
+            const float eased = t * t * (3.0f - 2.0f * t);
+            targetRate = (turnStick.data[0] > 0.0f ? -1.0f : 1.0f) * maxRate * eased;
+        }
+        const float setting = std::clamp(float(vr_snapTurn), 0.0f, 10.0f);
+        const float responseScale = setting <= 0.0f ? 15.0f : 1.0f + (10.0f - setting);
+        turnRate += (targetRate - turnRate) * (1.0f - std::exp(-response * responseScale * dt));
+        const float deltaDegrees = turnRate * dt;
+        pendingViewYawDeltaDegrees -= deltaDegrees;
+        if (magnitude <= 0.05f) turnRate = 0.0f;
+    }
     Edge(KEY_PAD_LTRIGGER, current.left.trigger > 0.5f, previous.left.trigger > 0.5f);
     Edge(KEY_PAD_RTRIGGER, current.right.trigger > 0.5f, previous.right.trigger > 0.5f);
     Edge(KEY_PAD_START, current.right.menu, previous.right.menu);
@@ -189,6 +240,17 @@ void RT_OpenXRInputPoll()
     Edge(KEY_PAD_X, current.left.faceX, previous.left.faceX);
     Edge(KEY_PAD_Y, current.left.faceY, previous.left.faceY);
     Edge(KEY_PAD_RTHUMB, current.right.thumbClick, previous.right.thumbClick);
+    Edge(KEY_PAD_LTHUMB, current.left.thumbClick, previous.left.thumbClick);
     PollPointer(current, previous);
     previous = current;
+    previousFrameTime = current.frameTime;
+}
+
+bool RT_OpenXRInputAvailable() { return getSnapshot != nullptr; }
+void RT_OpenXRInputConfigure(const float d[4], const float sc[4], const EJoyAxis m[4], float sensitivity) { std::copy(d, d+4, configuredDead); std::copy(sc, sc+4, configuredScale); std::copy(m, m+4, configuredMap); configuredSensitivity=sensitivity; }
+float RT_OpenXRInputConsumeViewYawDeltaDegrees()
+{
+    const float result = pendingViewYawDeltaDegrees;
+    pendingViewYawDeltaDegrees = 0.0f;
+    return result;
 }

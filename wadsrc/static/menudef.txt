@@ -2702,13 +2702,24 @@ OptionMenu "VROptionsMenu" protected
 	Submenu "$VRPREFMNU_PRESENTATION", "VRPresentationMenu"
 	Submenu "$VRPREFMNU_CINEMA_SCREEN", "VRCinemaScreenMenu"
 	Submenu "$VRPREFMNU_RAYTRACING_PERF", "VRRayTracingPerfMenu"
-
 	StaticText " "
 
 	StaticText "$VRPREFMNU_PLANNED", 1
 	StaticText "$VRPREFMNU_PLANNED_MIRROR", 1
 	StaticText "$VRPREFMNU_PLANNED_MULTIVIEW", 1
-	StaticText "$VRPREFMNU_PLANNED_LOCOMOTION", 1
+	StaticText "Locomotion", gold
+	Option "Off-hand Move Direction", vr_move_use_offhand, "OnOff"
+	Option "Use Teleport", vr_teleport, "OnOff"
+	Option "Slidey Movement / Momentum", vr_momentum, "OnOff"
+	ScaleSlider "Walk Speed", vr_move_speed, 0, 50, 1, "Multiplier Active"
+	Slider "Walk Multiplier", vr_walk_multiplier, 0.5, 2.0, 0.01, 2, use_walk_multiplier
+	Slider "Run Multiplier", vr_run_multiplier, 0.5, 2.0, 0.01, 2
+	StaticText "Walk speed of 0 enables multiplier mode.", brown
+	StaticText ""
+	Slider "Snap Turn Angle", vr_snapTurn, 0.0, 90.0, 1.0, 2
+	StaticText "0-10 enables smooth turning; higher values set snap angle.", brown
+	StaticText " "
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_move_use_offhand vr_teleport vr_momentum vr_move_speed vr_walk_multiplier vr_run_multiplier vr_snapTurn"
 	StaticText "$VRPREFMNU_PLANNED_SAMPLING", 1
 }
 

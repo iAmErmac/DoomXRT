@@ -431,6 +431,7 @@ set( PLAT_WIN32_SOURCES
 	common/platform/win32/i_dijoy.cpp
 	common/platform/win32/i_rawps2.cpp
 	common/platform/win32/i_xinput.cpp
+	common/platform/win32/i_openxr.cpp
 	common/platform/win32/i_main.cpp
 	common/platform/win32/i_mainwindow.cpp
 	common/platform/win32/i_system.cpp

@@ -55,6 +55,10 @@
 CVAR(Int, vr_mode, 0, CVAR_GLOBALCONFIG|CVAR_ARCHIVE)
 CVAR(Float, vr_snapTurn, 45.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_switch_sticks, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_move_use_offhand, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_teleport, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_momentum, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_momentum_threshold, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
 // VR virtual-screen presentation controls.
 CVAR(Int, vr_overlayscreen, 2, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
@@ -96,6 +100,10 @@ CVAR(Float, vr_screendist, 0.80f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG) // METERS
 
 // default conversion between (vertical) DOOM units and meters
 CVAR(Float, vr_hunits_per_meter, 41.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG) // METERS
+EXTERN_CVAR(Float, turbo)
+CUSTOM_CVAR(Int, vr_move_speed, 19, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOINITCALL) { turbo->Callback(); }
+CUSTOM_CVAR(Float, vr_walk_multiplier, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOINITCALL) { turbo->Callback(); }
+CUSTOM_CVAR(Float, vr_run_multiplier, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOINITCALL) { turbo->Callback(); }
 
 namespace
 {

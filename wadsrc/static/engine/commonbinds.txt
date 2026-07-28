@@ -48,6 +48,8 @@ end centerview
 
 // Xbox 360 / PS2 controllers
 pad_a +use
+pad_b +jump
+pad_x invuse
 pad_y +jump
 rtrigger +attack
 ltrigger +altattack

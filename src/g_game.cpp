@@ -91,14 +91,17 @@
 #include "screenjob.h"
 #include "i_interface.h"
 #include "fs_findfile.h"
+#include "hwrenderer/data/hw_vrmodes.h"
 
 
 static FRandom pr_dmspawn ("DMSpawn");
 static FRandom pr_pspawn ("PlayerSpawn");
 
+float RT_OpenXRInputConsumeViewYawDeltaDegrees();
 extern int startpos, laststartpos;
 
 bool WriteZip(const char* filename, const FileSys::FCompressedBuffer* content, size_t contentcount);
+CVAR(Bool, use_walk_multiplier, false, 0)
 bool	G_CheckDemoStatus (void);
 void	G_ReadDemoTiccmd (ticcmd_t *cmd, int player);
 void	G_WriteDemoTiccmd (ticcmd_t *cmd, int player, int buf);
@@ -193,6 +196,9 @@ short			consistancy[MAXPLAYERS][BACKUPTICS];
  
 #define TURBOTHRESHOLD	12800
 
+EXTERN_CVAR (Int, vr_move_speed)
+EXTERN_CVAR (Float, vr_walk_multiplier)
+EXTERN_CVAR (Float, vr_run_multiplier)
 EXTERN_CVAR (Int, turnspeedwalkfast)
 EXTERN_CVAR (Int, turnspeedsprintfast)
 EXTERN_CVAR (Int, turnspeedwalkslow)
@@ -610,6 +616,22 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	int 		forward;
 	int 		side;
 	int			fly;
+	int		moveforward[2] = { forwardmove[0], forwardmove[1] };
+	int		moveside[2] = { sidemove[0], sidemove[1] };
+
+	if (const VRMode* vrmode = VRMode::GetVRMode(); vrmode != nullptr && vrmode->IsVR())
+	{
+		const double scale = turbo * 0.01;
+		const double walk = vr_move_speed > 0
+			? double(vr_move_speed) / double(gameinfo.normforwardmove[0])
+			: double(vr_walk_multiplier);
+		use_walk_multiplier = vr_move_speed == 0;
+		moveforward[0] = int(gameinfo.normforwardmove[0] * scale * walk);
+		moveforward[1] = int(gameinfo.normforwardmove[1] * scale * walk * vr_run_multiplier);
+		moveside[0] = int(gameinfo.normsidemove[0] * scale * walk);
+		moveside[1] = int(gameinfo.normsidemove[1] * scale * walk * vr_run_multiplier);
+	}
+
 
 	ticcmd_t	*base;
 
@@ -620,6 +642,15 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 
 	strafe = buttonMap.ButtonDown(Button_Strafe);
 	speed = buttonMap.ButtonDown(Button_Speed) ^ (int)cl_run;
+
+	if (const VRMode* vrmode = VRMode::GetVRMode(); vrmode != nullptr && vrmode->IsVR())
+	{
+		const float yawDeltaDegrees = RT_OpenXRInputConsumeViewYawDeltaDegrees();
+		if (yawDeltaDegrees != 0.0f)
+		{
+			G_AddViewAngle(int(std::lround(yawDeltaDegrees * 65536.0f / 360.0f)));
+		}
+	}
 
 	forward = side = fly = 0;
 
@@ -635,9 +666,9 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	if (strafe)
 	{
 		if (buttonMap.ButtonDown(Button_Right))
-			side += sidemove[speed];
+			side += moveside[speed];
 		if (buttonMap.ButtonDown(Button_Left))
-			side -= sidemove[speed];
+			side -= moveside[speed];
 	}
 	else
 	{
@@ -680,15 +711,15 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	else
 	{
 		if (buttonMap.ButtonDown(Button_Forward))
-			forward += forwardmove[speed];
+			forward += moveforward[speed];
 		if (buttonMap.ButtonDown(Button_Back))
-			forward -= forwardmove[speed];
+			forward -= moveforward[speed];
 	}
 
 	if (buttonMap.ButtonDown(Button_MoveRight))
-		side += sidemove[speed];
+		side += moveside[speed];
 	if (buttonMap.ButtonDown(Button_MoveLeft))
-		side -= sidemove[speed];
+		side -= moveside[speed];
 
 	// buttons
 	if (buttonMap.ButtonDown(Button_Attack))		cmd->ucmd.buttons |= BT_ATTACK;
@@ -745,8 +776,8 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 		G_AddViewAngle(joyint(-1280 * joyaxes[JOYAXIS_Yaw]));
 	}
 
-	side -= joyint(sidemove[speed] * joyaxes[JOYAXIS_Side]);
-	forward += joyint(joyaxes[JOYAXIS_Forward] * forwardmove[speed]);
+	side -= joyint(moveside[speed] * joyaxes[JOYAXIS_Side]);
+	forward += joyint(joyaxes[JOYAXIS_Forward] * moveforward[speed]);
 	fly += joyint(joyaxes[JOYAXIS_Up] * 2048);
 
 	// Handle mice.

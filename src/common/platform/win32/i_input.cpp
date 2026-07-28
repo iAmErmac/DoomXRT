@@ -577,6 +577,8 @@ bool I_InitInput (void *hwnd)
 	Printf ("I_StartupRawPS2\n");
 	I_StartupRawPS2();
 
+	I_StartupOpenXR();
+
 	Printf ("I_StartupDirectInputJoystick\n");
 	I_StartupDirectInputJoystick();
 

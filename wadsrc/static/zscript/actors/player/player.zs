@@ -1297,6 +1297,17 @@ class PlayerPawn : Actor
 		}
 
 		player.onground = (pos.z <= floorz) || bOnMobj || bMBFBouncer || (player.cheats & CF_NOCLIP2);
+		double friction, movefactor;
+
+		[friction, movefactor] = GetFriction();
+		if (!multiplayer && !vr_momentum && !player.keepmomentum && player.onground && friction == ORIG_FRICTION)
+		{
+			vel.XY *= 0.0001;
+			Speed = Default.Speed * 8;
+		}
+		else Speed = Default.Speed;
+		if (!multiplayer && abs(vel.x) < vr_momentum_threshold && abs(vel.y) < vr_momentum_threshold)
+			player.keepmomentum = false;
 
 		// killough 10/98:
 		//
@@ -1309,10 +1320,8 @@ class PlayerPawn : Actor
 		{
 			double forwardmove, sidemove;
 			double bobfactor;
-			double friction, movefactor;
 			double fm, sm;
 
-			[friction, movefactor] = GetFriction();
 			bobfactor = friction < ORIG_FRICTION ? movefactor : ORIG_FRICTION_FACTOR;
 			if (!player.onground && !bNoGravity && !waterlevel)
 			{
@@ -2927,6 +2936,7 @@ struct PlayerInfo native play	// self is what internally is known as player_t
 	native int chickenPeck;
 	native int jumpTics;
 	native bool onground;
+	native bool keepmomentum;
 	native int respawn_time;
 	native Actor camera;
 	native int air_finished;

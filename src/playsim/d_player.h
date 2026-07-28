@@ -392,6 +392,7 @@ public:
 	int			chickenPeck = 0;			// chicken peck countdown
 	int			jumpTics = 0;				// delay the next jump for a moment
 	bool		onground = 0;				// Identifies if this player is on the ground or other object
+	bool		keepmomentum = 0;			// Preserve scripted/conveyor momentum until it decays.
 	bool		crossingPortal = 0;			// Crossing a portal (disables sprite from showing up)
 
 	int			respawn_time = 0;			// [RH] delay respawning until this tic
