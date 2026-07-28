@@ -123,6 +123,7 @@ CVARD_NAMED(Int, gameskill, skill, 2, CVAR_SERVERINFO|CVAR_LATCH, "sets the skil
 CVAR(Bool, save_formatted, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)	// use formatted JSON for saves (more readable but a larger files and a bit slower.
 CVAR (Int, deathmatch, 0, CVAR_SERVERINFO|CVAR_LATCH);
 CVAR (Bool, chasedemo, false, 0);
+CVAR (Bool, vanilla_melee_attack, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
 CVAR (Bool, storesavepic, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
 CVAR (Bool, longsavemessages, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
 CVAR (Bool, cl_waitforsave, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
@@ -619,7 +620,10 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	int		moveforward[2] = { forwardmove[0], forwardmove[1] };
 	int		moveside[2] = { sidemove[0], sidemove[1] };
 
-	if (const VRMode* vrmode = VRMode::GetVRMode(); vrmode != nullptr && vrmode->IsVR())
+	const VRMode* vrmode = VRMode::GetVRMode();
+	players[consoleplayer].PlayInVR = !multiplayer && vrmode != nullptr && vrmode->IsVR();
+
+	if (vrmode != nullptr && vrmode->IsVR())
 	{
 		const double scale = turbo * 0.01;
 		const double walk = vr_move_speed > 0
@@ -643,7 +647,7 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	strafe = buttonMap.ButtonDown(Button_Strafe);
 	speed = buttonMap.ButtonDown(Button_Speed) ^ (int)cl_run;
 
-	if (const VRMode* vrmode = VRMode::GetVRMode(); vrmode != nullptr && vrmode->IsVR())
+	if (vrmode != nullptr && vrmode->IsVR())
 	{
 		const float yawDeltaDegrees = RT_OpenXRInputConsumeViewYawDeltaDegrees();
 		if (yawDeltaDegrees != 0.0f)

@@ -11,6 +11,7 @@
 
 EXTERN_CVAR(Float, snd_menuvolume)
 EXTERN_CVAR(Int, m_use_mouse);
+extern bool menu_allow_mouse_override;
 
 
 struct event_t;

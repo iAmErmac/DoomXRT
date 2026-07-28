@@ -84,6 +84,7 @@ EXTERN_CVAR( Bool, vr_swap_eyes )
 EXTERN_CVAR( Float, vr_snapTurn )
 EXTERN_CVAR( Bool, vr_switch_sticks )
 EXTERN_CVAR( Int, vr_control_scheme )
+EXTERN_CVAR( Color, vr_menu_pointer_color )
 EXTERN_CVAR( Float, movebob )
 
 extern uint64_t g_vr_virtual_screen_recenter_request;
@@ -2296,8 +2297,6 @@ public:
             };
             const auto recenterInverse = RgQuaternion{{ -g_rtOpenXRRecenterOrientation.data[ 0 ], -g_rtOpenXRRecenterOrientation.data[ 1 ], -g_rtOpenXRRecenterOrientation.data[ 2 ], g_rtOpenXRRecenterOrientation.data[ 3 ] }};
             const auto headOrientation = quaternionMultiply( recenterInverse, g_rtOpenXRFrameState.headPose.orientation );
-            const RgFloat3D headForward = quaternionRotate( headOrientation, RgFloat3D{{ 0.0f, 0.0f, -1.0f }} );
-            RT_OpenXRInputSetMovementYawRadians( std::atan2( headForward.data[ 0 ], -headForward.data[ 2 ] ) );
             const auto mapToWorld = [ & ]( const RgFloat3D& local ) {
                 return RgFloat3D{{
                     right.data[ 0 ] * local.data[ 0 ] + up.data[ 0 ] * local.data[ 1 ] - forward.data[ 0 ] * local.data[ 2 ],
@@ -3412,6 +3411,30 @@ static void RT_DrawVersionString2D()
 
 void RTFrameBuffer::Draw2D()
 {
+    int pointerX = 0;
+    int pointerY = 0;
+    if( !RT_OpenXRInputGetMenuPointer( &pointerX, &pointerY ) )
+    {
+        ::Draw2D( twod, *m_state );
+        return;
+    }
+
+    const PalEntry cursorColor = PalEntry( vr_menu_pointer_color );
+    const uint32_t cursorLineColor = 0xFF000000u |
+        ( uint32_t( cursorColor.b ) << 16 ) |
+        ( uint32_t( cursorColor.g ) << 8 ) |
+        uint32_t( cursorColor.r );
+    constexpr float cursorRadius = 8.0f;
+    constexpr int cursorSegments = 16;
+    for( int i = 0; i < cursorSegments; ++i )
+    {
+        const float a0 = float( 2.0 * pi() * double( i ) / double( cursorSegments ) );
+        const float a1 = float( 2.0 * pi() * double( i + 1 ) / double( cursorSegments ) );
+        twod->AddThickLine( DVector2( pointerX + std::cos( a0 ) * cursorRadius, pointerY + std::sin( a0 ) * cursorRadius ),
+                            DVector2( pointerX + std::cos( a1 ) * cursorRadius, pointerY + std::sin( a1 ) * cursorRadius ),
+                            3.0, cursorLineColor, 255 );
+    }
+    twod->AddColorOnlyQuad( pointerX - 3, pointerY - 3, 6, 6, PalEntry( 255, cursorColor.r, cursorColor.g, cursorColor.b ) );
     ::Draw2D( twod, *m_state );
 }
 

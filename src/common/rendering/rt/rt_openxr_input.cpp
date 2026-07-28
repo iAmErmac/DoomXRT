@@ -17,11 +17,18 @@ EXTERN_CVAR(Bool, vr_switch_sticks)
 EXTERN_CVAR(Bool, vr_move_use_offhand)
 EXTERN_CVAR(Float, vr_snapTurn)
 EXTERN_CVAR(Int, vr_control_scheme)
+EXTERN_CVAR(Int, vr_joy_mode)
+EXTERN_CVAR(Bool, vr_secondary_button_mappings)
 EXTERN_CVAR(Bool, vr_menu_pointer)
 EXTERN_CVAR(Bool, vr_enable_haptics)
 EXTERN_CVAR(Float, vr_pickup_haptic_level)
 EXTERN_CVAR(Float, vr_quake_haptic_level)
 EXTERN_CVAR(Bool, vr_mouse_in_menu)
+EXTERN_CVAR(Float, vr_weaponRotate)
+EXTERN_CVAR(Color, vr_menu_pointer_color)
+
+extern RgInterface rt;
+extern bool menu_allow_mouse_override;
 
 namespace
 {
@@ -29,9 +36,17 @@ using GetSnapshot = RgResult (RGAPI_PTR*)(RgOpenXRInputSnapshotEXT*);
 GetSnapshot getSnapshot = nullptr;
 using ApplyHaptic = RgResult (RGAPI_PTR*)(uint32_t, float, float);
 ApplyHaptic applyHaptic = nullptr;
+using SetMenuPointerBeam = RgResult (RGAPI_PTR*)(const RgOpenXRMenuPointerBeamEXT*);
+SetMenuPointerBeam setMenuPointerBeam = nullptr;
 RgOpenXRInputSnapshotEXT previous{};
 bool snapTurnLatched = false;
 bool pointerHeld = false;
+bool pointerRightHeld = false;
+int pointerWheelCooldown = 0;
+int pointerX = 0;
+int pointerY = 0;
+bool pointerActive = false;
+bool previousSecondaryButtonMappings = false;
 float configuredDead[4] = { .25f,.25f,.25f,.25f };
 float configuredScale[4] = { 1,1,1,1 };
 EJoyAxis configuredMap[4] = { JOYAXIS_Side, JOYAXIS_Forward, JOYAXIS_None, JOYAXIS_None };
@@ -39,7 +54,6 @@ float configuredSensitivity = 1.0f;
 RT_OpenXRWorldHandPose worldHandPoses[2];
 float pendingViewYawDeltaDegrees = 0.0f;
 float turnRate = 0.0f;
-float movementYawRadians = 0.0f;
 RT_OpenXRHandPose handPoses[2];
 std::chrono::steady_clock::time_point hapticReady[2];
 int MainHandIndex() { return vr_control_scheme < 10 ? 1 : 0; }
@@ -68,6 +82,16 @@ RgFloat2D FilterMovementStick(const RgFloat2D& stick)
 	const float filteredLength = std::pow((length - deadZone) / (1.0f - deadZone), power);
 	const float divisor = std::max(length, 1.0f);
 	RgFloat2D result{{ filteredLength * stick.data[0] / divisor, filteredLength * stick.data[1] / divisor }};
+	const float x = std::fabs(stick.data[0]);
+	const float y = std::fabs(stick.data[1]);
+	if (y > x && (x == 0.0f || y / x > 1.10f))
+	{
+		result.data[0] = 0.0f;
+	}
+	else if (x > y && (y == 0.0f || x / y > 1.10f))
+	{
+		result.data[1] = 0.0f;
+	}
 	if (std::fabs(result.data[0]) + std::fabs(result.data[1]) <= 0.05f)
 	{
 		result = {{ 0.0f, 0.0f }};
@@ -94,43 +118,131 @@ RgFloat3D Rotate(const RgQuaternion& q, const RgFloat3D& v)
              (2*x*y+2*z*w)*v.data[0] + (1-2*x*x-2*z*z)*v.data[1] + (2*y*z-2*x*w)*v.data[2],
              (2*x*z-2*y*w)*v.data[0] + (2*y*z+2*x*w)*v.data[1] + (1-2*x*x-2*y*y)*v.data[2]}};
 }
+RgQuaternion Multiply(const RgQuaternion& a, const RgQuaternion& b)
+{
+    return {{a.data[3] * b.data[0] + a.data[0] * b.data[3] + a.data[1] * b.data[2] - a.data[2] * b.data[1],
+             a.data[3] * b.data[1] - a.data[0] * b.data[2] + a.data[1] * b.data[3] + a.data[2] * b.data[0],
+             a.data[3] * b.data[2] + a.data[0] * b.data[1] - a.data[1] * b.data[0] + a.data[2] * b.data[3],
+             a.data[3] * b.data[3] - a.data[0] * b.data[0] - a.data[1] * b.data[1] - a.data[2] * b.data[2]}};
+}
+float Dot(const RgFloat3D& a, const RgFloat3D& b) { return a.data[0] * b.data[0] + a.data[1] * b.data[1] + a.data[2] * b.data[2]; }
+RgFloat3D Cross(const RgFloat3D& a, const RgFloat3D& b) { return {{a.data[1] * b.data[2] - a.data[2] * b.data[1], a.data[2] * b.data[0] - a.data[0] * b.data[2], a.data[0] * b.data[1] - a.data[1] * b.data[0]}}; }
+RgFloat3D Normalize(const RgFloat3D& value)
+{
+    const float length = std::sqrt(Dot(value, value));
+    return length > 0.00001f ? RgFloat3D{{value.data[0] / length, value.data[1] / length, value.data[2] / length}} : RgFloat3D{{0, 0, -1}};
+}
+RgQuaternion QuaternionFromBasis(const RgFloat3D& x, const RgFloat3D& y, const RgFloat3D& z)
+{
+    const float trace = x.data[0] + y.data[1] + z.data[2];
+    RgQuaternion q{};
+    if (trace > 0.0f) { const float s = std::sqrt(trace + 1.0f) * 2.0f; q = {{(y.data[2] - z.data[1]) / s, (z.data[0] - x.data[2]) / s, (x.data[1] - y.data[0]) / s, 0.25f * s}}; }
+    else if (x.data[0] > y.data[1] && x.data[0] > z.data[2]) { const float s = std::sqrt(1.0f + x.data[0] - y.data[1] - z.data[2]) * 2.0f; q = {{0.25f * s, (x.data[1] + y.data[0]) / s, (x.data[2] + z.data[0]) / s, (y.data[2] - z.data[1]) / s}}; }
+    else if (y.data[1] > z.data[2]) { const float s = std::sqrt(1.0f + y.data[1] - x.data[0] - z.data[2]) * 2.0f; q = {{(x.data[1] + y.data[0]) / s, 0.25f * s, (y.data[2] + z.data[1]) / s, (z.data[0] - x.data[2]) / s}}; }
+    else { const float s = std::sqrt(1.0f + z.data[2] - x.data[0] - y.data[1]) * 2.0f; q = {{(x.data[2] + z.data[0]) / s, (y.data[2] + z.data[1]) / s, 0.25f * s, (x.data[1] - y.data[0]) / s}}; }
+    return q;
+}
 void PostGui(EGUIEvent subtype, int x, int y)
 {
     event_t ev{}; ev.type = EV_GUI_Event; ev.subtype = subtype; ev.data1 = static_cast<int16_t>(x); ev.data2 = static_cast<int16_t>(y); D_PostEvent(&ev);
 }
+void SubmitPointerBeam(const RgOpenXRMenuPointerBeamEXT& beam)
+{
+    if (rt.rgSetOpenXRMenuPointerBeamEXT) rt.rgSetOpenXRMenuPointerBeamEXT(&beam);
+    else if (setMenuPointerBeam) setMenuPointerBeam(&beam);
+}
+void PostPointerWheel(const RgOpenXRControllerStateEXT& pointer)
+{
+    if (vr_joy_mode != 1) return;
+    if (pointerWheelCooldown > 0) --pointerWheelCooldown;
+    if (pointerWheelCooldown == 0 && pointer.stick.data[1] >= 0.55f) { PostGui(EV_GUI_WheelUp, pointerX, pointerY); pointerWheelCooldown = 8; }
+    else if (pointerWheelCooldown == 0 && pointer.stick.data[1] <= -0.55f) { PostGui(EV_GUI_WheelDown, pointerX, pointerY); pointerWheelCooldown = 8; }
+}
 void PollPointer(const RgOpenXRInputSnapshotEXT& current, const RgOpenXRInputSnapshotEXT&)
 {
-    const auto& pointer = MainHandIndex() == 1 ? current.right : current.left;
-    if (menuactive == MENU_Off || !vr_menu_pointer || (!vr_mouse_in_menu && pointer.grip <= 0.5f) || !pointer.pose.valid || !current.virtualScreenPose.valid || current.virtualScreenSize.data[0] <= 0.01f) {
+    pointerActive = false;
+    menu_allow_mouse_override = false;
+    const auto& pointer = current.right;
+    const bool pointerEnabled = menuactive != MENU_Off && menuactive != MENU_WaitKey && vr_menu_pointer && (vr_mouse_in_menu || pointer.grip > 0.5f);
+    if (!pointerEnabled || !pointer.pose.valid || !current.virtualScreenPose.valid || current.virtualScreenSize.data[0] <= 0.01f)
+    {
         if (pointerHeld) { PostGui(EV_GUI_LButtonUp, 0, 0); pointerHeld = false; }
+        if (pointerRightHeld) { PostGui(EV_GUI_RButtonUp, 0, 0); pointerRightHeld = false; }
+        pointerWheelCooldown = 0;
+        SubmitPointerBeam({RG_STRUCTURE_TYPE_OPENXR_MENU_POINTER_BEAM_EXT, nullptr, RG_FALSE});
         return;
     }
-    RgFloat3D origin{{pointer.pose.position.data[0] - current.virtualScreenPose.position.data[0], pointer.pose.position.data[1] - current.virtualScreenPose.position.data[1], pointer.pose.position.data[2] - current.virtualScreenPose.position.data[2]}};
+    constexpr float pi = 3.14159265358979323846f;
+    const float pointerRotation = -(vr_weaponRotate * 2.0f) * pi / 180.0f;
+    const RgQuaternion pointerAlign{{0, 0, std::sin(pointerRotation * 0.5f), std::cos(pointerRotation * 0.5f)}};
+    const RgQuaternion pointerOrientation = Multiply(pointer.pose.orientation, pointerAlign);
+    const RgFloat3D relativeOrigin{{pointer.pose.position.data[0] - current.virtualScreenPose.position.data[0], pointer.pose.position.data[1] - current.virtualScreenPose.position.data[1], pointer.pose.position.data[2] - current.virtualScreenPose.position.data[2]}};
     const RgQuaternion& screenQ = current.virtualScreenPose.orientation;
-    RgQuaternion invScreen{{-screenQ.data[0], -screenQ.data[1], -screenQ.data[2], screenQ.data[3]}};
-    RgFloat3D forward{{0, 0, -1}};
-    RgFloat3D worldDirection = Rotate(pointer.pose.orientation, forward);
-    RgFloat3D localOrigin = Rotate(invScreen, origin);
-    RgFloat3D localDirection = Rotate(invScreen, worldDirection);
-    if (std::fabs(localDirection.data[2]) < 0.0001f) return;
+    const RgQuaternion inverseScreen{{-screenQ.data[0], -screenQ.data[1], -screenQ.data[2], screenQ.data[3]}};
+    const RgFloat3D worldDirection = Rotate(pointerOrientation, {{0, 0, -1}});
+    const RgFloat3D localOrigin = Rotate(inverseScreen, relativeOrigin);
+    const RgFloat3D localDirection = Rotate(inverseScreen, worldDirection);
+    if (std::fabs(localDirection.data[2]) < 0.0001f) { SubmitPointerBeam({RG_STRUCTURE_TYPE_OPENXR_MENU_POINTER_BEAM_EXT, nullptr, RG_FALSE}); PostPointerWheel(pointer); return; }
     const float t = -localOrigin.data[2] / localDirection.data[2];
-    const float x = localOrigin.data[0] + t * localDirection.data[0];
-    const float y = localOrigin.data[1] + t * localDirection.data[1];
-    const float u = x / current.virtualScreenSize.data[0] + 0.5f;
-    const float v = 0.5f - y / current.virtualScreenSize.data[1];
-    if (t <= 0 || u < 0 || u > 1 || v < 0 || v > 1) {
-        if (pointerHeld) { PostGui(EV_GUI_LButtonUp, 0, 0); pointerHeld = false; }
-        return;
+    if (t <= 0.0f) { SubmitPointerBeam({RG_STRUCTURE_TYPE_OPENXR_MENU_POINTER_BEAM_EXT, nullptr, RG_FALSE}); PostPointerWheel(pointer); return; }
+    const float localX = localOrigin.data[0] + t * localDirection.data[0];
+    const float localY = localOrigin.data[1] + t * localDirection.data[1];
+    const float unclampedU = localX / current.virtualScreenSize.data[0] + 0.5f;
+    const float unclampedV = 0.5f - localY / current.virtualScreenSize.data[1];
+    const bool dragging = pointerHeld || pointerRightHeld;
+    const bool inside = unclampedU >= 0.0f && unclampedU <= 1.0f && unclampedV >= 0.0f && unclampedV <= 1.0f;
+    const int px = static_cast<int>(std::clamp(unclampedU, 0.0f, 1.0f) * (screen->GetWidth() - 1));
+    const int py = static_cast<int>(std::clamp(unclampedV, 0.0f, 1.0f) * (screen->GetHeight() - 1));
+    const RgFloat3D hitPoint{{pointer.pose.position.data[0] + worldDirection.data[0] * t, pointer.pose.position.data[1] + worldDirection.data[1] * t, pointer.pose.position.data[2] + worldDirection.data[2] * t}};
+    const RgFloat3D beamVector{{hitPoint.data[0] - pointer.pose.position.data[0], hitPoint.data[1] - pointer.pose.position.data[1], hitPoint.data[2] - pointer.pose.position.data[2]}};
+    const float beamLength = std::sqrt(Dot(beamVector, beamVector));
+    if (beamLength > 0.01f)
+    {
+        const RgFloat3D beamDirection = Normalize(beamVector);
+        const RgFloat3D beamCenter{{pointer.pose.position.data[0] + beamDirection.data[0] * beamLength * 0.5f, pointer.pose.position.data[1] + beamDirection.data[1] * beamLength * 0.5f, pointer.pose.position.data[2] + beamDirection.data[2] * beamLength * 0.5f}};
+        const RgFloat3D viewer = current.headPose.valid ? current.headPose.position : current.virtualScreenPose.position;
+        RgFloat3D xAxis = Normalize(Cross(Normalize({{viewer.data[0] - beamCenter.data[0], viewer.data[1] - beamCenter.data[1], viewer.data[2] - beamCenter.data[2]} }), beamDirection));
+        if (Dot(xAxis, xAxis) < 0.0001f) xAxis = Normalize(Cross({{0, 1, 0}}, beamDirection));
+        const RgFloat3D zAxis = Normalize(Cross(beamDirection, xAxis));
+        const int color = int(vr_menu_pointer_color);
+        SubmitPointerBeam({RG_STRUCTURE_TYPE_OPENXR_MENU_POINTER_BEAM_EXT, nullptr, RG_TRUE, {beamCenter, QuaternionFromBasis(beamDirection, xAxis, zAxis), RG_TRUE}, beamLength, {{((color >> 16) & 255) / 255.0f, ((color >> 8) & 255) / 255.0f, (color & 255) / 255.0f, 1.0f}}});
     }
-    const int px = static_cast<int>(u * screen->GetWidth());
-    const int py = static_cast<int>(v * screen->GetHeight());
-    PostGui(EV_GUI_MouseMove, px, py);
-    const bool click = pointer.trigger > 0.5f;
-    if (click != pointerHeld) { PostGui(click ? EV_GUI_LButtonDown : EV_GUI_LButtonUp, px, py); pointerHeld = click; }
-}void Edge(int key, bool now, bool old)
+    if (inside || dragging)
+    {
+        pointerActive = true;
+        menu_allow_mouse_override = true;
+        pointerX = px;
+        pointerY = py;
+        PostGui(EV_GUI_MouseMove, px, py);
+        const bool click = pointer.trigger > 0.5f;
+        if (click != pointerHeld) { PostGui(click ? EV_GUI_LButtonDown : EV_GUI_LButtonUp, px, py); pointerHeld = click; }
+        const bool rightClick = vr_mouse_in_menu && pointer.grip > 0.5f;
+        if (rightClick != pointerRightHeld) { PostGui(rightClick ? EV_GUI_RButtonDown : EV_GUI_RButtonUp, px, py); pointerRightHeld = rightClick; }
+    }
+    else
+    {
+        if (pointerHeld) { PostGui(EV_GUI_LButtonUp, 0, 0); pointerHeld = false; }
+        if (pointerRightHeld) { PostGui(EV_GUI_RButtonUp, 0, 0); pointerRightHeld = false; }
+    }
+    PostPointerWheel(pointer);
+}
+
+void Edge(int key, bool now, bool old)
 {
     if (now != old) PostKey(key, now != RG_FALSE);
-    old = now;
+}
+
+void RemappedEdge(bool oldPressed, bool newPressed, bool oldModifier, bool newModifier, int baseKey, int modifiedKey)
+{
+    const int oldKey = oldModifier ? modifiedKey : baseKey;
+    const int newKey = newModifier ? modifiedKey : baseKey;
+    if (oldKey == newKey)
+    {
+        Edge(newKey, newPressed, oldPressed);
+        return;
+    }
+    if (oldPressed) PostKey(oldKey, false);
+    if (newPressed) PostKey(newKey, true);
 }
 
 void StickEdges(const RgFloat2D& stick, int right, int left, int down, int up,
@@ -152,6 +264,37 @@ void StickEdges(const RgFloat2D& stick, int right, int left, int down, int up,
     if (now != was) { if (was) PostKey(was==1?right:was==-1?left:was==2?down:up,false); if (now) PostKey(now==1?right:now==-1?left:now==2?down:up,true); }
     old = stick;
 }
+
+void RemappedStickEdges(const RgFloat2D& current, const RgFloat2D& old, bool oldModifier, bool newModifier,
+    int baseRight, int baseLeft, int baseDown, int baseUp, int modifiedRight, int modifiedLeft, int modifiedDown, int modifiedUp)
+{
+    const bool strictRightVertical =
+        (baseDown == KEY_JOYAXIS4MINUS && baseUp == KEY_JOYAXIS4PLUS) ||
+        (modifiedDown == KEY_JOYAXIS8MINUS && modifiedUp == KEY_JOYAXIS8PLUS);
+    const float xDeadZone = 0.25f;
+    const float yDeadZone = strictRightVertical ? 0.72f : 0.25f;
+    const float horizontalDominanceMargin = strictRightVertical ? 0.00f : 0.15f;
+    const float verticalDominanceMargin = strictRightVertical ? 0.30f : 0.15f;
+    auto resolveCardinalStates = [&](const RgFloat2D& stick, bool& left, bool& right, bool& down, bool& up) {
+        const float x = std::fabs(stick.data[0]), y = std::fabs(stick.data[1]);
+        const bool xActive = x > xDeadZone;
+        const bool yActive = y > yDeadZone;
+        const bool xDominant = xActive && (!yActive || x - y >= horizontalDominanceMargin);
+        const bool yDominant = yActive && (!xActive || y - x >= verticalDominanceMargin);
+        left = xDominant && stick.data[0] < 0.0f;
+        right = xDominant && stick.data[0] > 0.0f;
+        down = yDominant && stick.data[1] < 0.0f;
+        up = yDominant && stick.data[1] > 0.0f;
+    };
+    bool oldLeft = false, oldRight = false, oldDown = false, oldUp = false;
+    bool newLeft = false, newRight = false, newDown = false, newUp = false;
+    resolveCardinalStates(old, oldLeft, oldRight, oldDown, oldUp);
+    resolveCardinalStates(current, newLeft, newRight, newDown, newUp);
+    RemappedEdge(oldRight, newRight, oldModifier, newModifier, baseRight, modifiedRight);
+    RemappedEdge(oldLeft, newLeft, oldModifier, newModifier, baseLeft, modifiedLeft);
+    RemappedEdge(oldDown, newDown, oldModifier, newModifier, baseDown, modifiedDown);
+    RemappedEdge(oldUp, newUp, oldModifier, newModifier, baseUp, modifiedUp);
+}
 }
 
 void RT_OpenXRInputBindModule(
@@ -165,9 +308,11 @@ void RT_OpenXRInputBindModule(
 #ifdef _WIN32
     getSnapshot = module ? reinterpret_cast<GetSnapshot>(GetProcAddress(module, "rgGetOpenXRInputSnapshotEXT")) : nullptr;
     applyHaptic = module ? reinterpret_cast<ApplyHaptic>(GetProcAddress(module, "rgApplyOpenXRHapticFeedbackEXT")) : nullptr;
+    setMenuPointerBeam = module ? reinterpret_cast<SetMenuPointerBeam>(GetProcAddress(module, "rgSetOpenXRMenuPointerBeamEXT")) : nullptr;
 #else
     getSnapshot = nullptr;
     applyHaptic = nullptr;
+    setMenuPointerBeam = nullptr;
 #endif
     RT_OpenXRInputReset();
 }
@@ -191,7 +336,13 @@ void ReleaseAll()
     if (previous.left.faceX) PostKey(KEY_PAD_X, false); if (previous.left.faceY) PostKey(KEY_PAD_Y, false);
     if (previous.right.thumbClick) PostKey(KEY_PAD_RTHUMB, false);
     if (previous.left.thumbClick) PostKey(KEY_PAD_LTHUMB, false);
+    for (int key = KEY_JOYAXIS1PLUS; key <= KEY_JOYAXIS8MINUS; ++key) PostKey(key, false);
+    PostKey(KEY_PAD_LSHOULDER, false); PostKey(KEY_PAD_RSHOULDER, false);
+    PostKey(KEY_LSHIFT, false); PostKey(KEY_LALT, false); PostKey(KEY_ENTER, false); PostKey(KEY_SPACE, false);
+    PostKey(KEY_TAB, false); PostKey(KEY_HOME, false); PostKey(KEY_BACKSPACE, false); PostKey(KEY_PGDN, false); PostKey(KEY_PGUP, false); PostKey(KEY_PAD_DPAD_UP, false);
     if (pointerHeld) { PostGui(EV_GUI_LButtonUp, 0, 0); pointerHeld = false; }
+    if (pointerRightHeld) { PostGui(EV_GUI_RButtonUp, 0, 0); pointerRightHeld = false; }
+    pointerWheelCooldown = 0;
 }
 
 void RT_OpenXRInputReset()
@@ -204,9 +355,9 @@ void RT_OpenXRInputReset()
     hapticReady[1] = {};
     snapTurnLatched = false;
     turnRate = 0.0f;
-    movementYawRadians = 0.0f;
     handPoses[0] = {};
     handPoses[1] = {};
+    previousSecondaryButtonMappings = vr_secondary_button_mappings;
     previousFrameTime = 0;
 }
 void RT_OpenXRInputAddAxes(float axes[])
@@ -216,13 +367,8 @@ void RT_OpenXRInputAddAxes(float axes[])
     const auto& moveStick = MovementUsesRight() ? previous.right.stick : previous.left.stick;
     const auto& turnStick = MovementUsesRight() ? previous.left.stick : previous.right.stick;
     const RgFloat2D filteredMove = FilterMovementStick(moveStick);
-    const float localSide = -filteredMove.data[0];
-    const float localForward = filteredMove.data[1];
-    const float yawCos = std::cos(movementYawRadians);
-    const float yawSin = std::sin(movementYawRadians);
     const float values[4] = {
-        localSide * yawCos + localForward * yawSin,
-        localForward * yawCos - localSide * yawSin,
+        -filteredMove.data[0], filteredMove.data[1],
         turnStick.data[0], turnStick.data[1] };
     for (int i=0; i<4; ++i) { float v=values[i], a=std::fabs(v); if (a <= configuredDead[i]) v=0; else v=(v>0?1:-1)*(a-configuredDead[i])/(1-configuredDead[i]); if (configuredMap[i] != JOYAXIS_None) axes[configuredMap[i]] += v*configuredScale[i]*configuredSensitivity; }
 }
@@ -276,20 +422,71 @@ void RT_OpenXRInputPoll()
         pendingViewYawDeltaDegrees -= deltaDegrees;
         if (magnitude <= 0.05f) turnRate = 0.0f;
     }
-    Edge(KEY_PAD_LTRIGGER, current.left.trigger > 0.5f, previous.left.trigger > 0.5f);
-    Edge(KEY_PAD_RTRIGGER, current.right.trigger > 0.5f, previous.right.trigger > 0.5f);
+    const bool secondaryMappings = vr_secondary_button_mappings;
+    const int mainHand = MainHandIndex();
+    const bool oldModifier = previousSecondaryButtonMappings && (mainHand == 0 ? previous.left.grip : previous.right.grip) > 0.5f;
+    const bool newModifier = secondaryMappings && (mainHand == 0 ? current.left.grip : current.right.grip) > 0.5f;
+    const int pointerHand = 1;
+    const auto& pointer = current.right;
+    const bool pointerConsumesTrigger = menuactive != MENU_Off && menuactive != MENU_WaitKey && vr_menu_pointer && (vr_mouse_in_menu || pointer.grip > 0.5f);
+
+    for (int hand = 0; hand < 2; ++hand)
+    {
+        const auto& now = hand == 0 ? current.left : current.right;
+        const auto& old = hand == 0 ? previous.left : previous.right;
+        const bool dominant = hand == mainHand;
+        const int triggerBase = dominant ? KEY_PAD_RTRIGGER : KEY_LSHIFT;
+        const int triggerAlt = dominant ? KEY_PAD_LTRIGGER : KEY_LALT;
+        const int gripKey = hand == 0 ? KEY_PAD_LSHOULDER : KEY_PAD_RSHOULDER;
+        const int thumbBase = dominant ? KEY_ENTER : KEY_SPACE;
+        const int thumbAlt = dominant ? KEY_TAB : KEY_HOME;
+        const int face1Base = hand == 0 ? KEY_PAD_X : KEY_PAD_A;
+        const int face2Base = hand == 0 ? KEY_PAD_Y : KEY_PAD_B;
+        const int face1Alt = dominant ? KEY_PAD_LTHUMB : KEY_PGDN;
+        const int face2Alt = dominant ? KEY_BACKSPACE : KEY_PGUP;
+
+        RemappedEdge(old.trigger > 0.5f, pointerConsumesTrigger && hand == pointerHand ? false : now.trigger > 0.5f,
+            oldModifier, newModifier, triggerBase, triggerAlt);
+        if (dominant)
+        {
+            RemappedEdge(old.grip > 0.5f, secondaryMappings ? false : now.grip > 0.5f,
+                false, false, gripKey, gripKey);
+        }
+        else
+        {
+            RemappedEdge(old.grip > 0.5f, now.grip > 0.5f,
+                previousSecondaryButtonMappings, secondaryMappings, gripKey, KEY_PAD_DPAD_UP);
+        }
+        RemappedEdge(old.thumbClick, now.thumbClick, oldModifier, newModifier, thumbBase, thumbAlt);
+        if (menuactive == MENU_WaitKey) Edge(hand == 0 ? KEY_PAD_LTHUMB : KEY_PAD_RTHUMB, now.thumbClick, old.thumbClick);
+        const bool nowFace1 = hand == 0 ? now.faceX : now.faceA;
+        const bool oldFace1 = hand == 0 ? old.faceX : old.faceA;
+        const bool nowFace2 = hand == 0 ? now.faceY : now.faceB;
+        const bool oldFace2 = hand == 0 ? old.faceY : old.faceB;
+        RemappedEdge(oldFace1, nowFace1, oldModifier, newModifier, face1Base, face1Alt);
+        RemappedEdge(oldFace2, nowFace2, oldModifier, newModifier, face2Base, face2Alt);
+
+        if (vr_joy_mode == 1)
+        {
+            const int baseRight = hand == 0 ? KEY_JOYAXIS1PLUS : KEY_JOYAXIS3PLUS;
+            const int baseLeft = hand == 0 ? KEY_JOYAXIS1MINUS : KEY_JOYAXIS3MINUS;
+            const int baseDown = hand == 0 ? KEY_JOYAXIS2MINUS : KEY_JOYAXIS4MINUS;
+            const int baseUp = hand == 0 ? KEY_JOYAXIS2PLUS : KEY_JOYAXIS4PLUS;
+            const int modifiedRight = hand == 0 ? KEY_JOYAXIS5PLUS : KEY_JOYAXIS7PLUS;
+            const int modifiedLeft = hand == 0 ? KEY_JOYAXIS5MINUS : KEY_JOYAXIS7MINUS;
+            const int modifiedDown = hand == 0 ? KEY_JOYAXIS6MINUS : KEY_JOYAXIS8MINUS;
+            const int modifiedUp = hand == 0 ? KEY_JOYAXIS6PLUS : KEY_JOYAXIS8PLUS;
+            RemappedStickEdges(now.stick, old.stick, oldModifier, newModifier,
+                baseRight, baseLeft, baseDown, baseUp, modifiedRight, modifiedLeft, modifiedDown, modifiedUp);
+        }
+    }
     Edge(KEY_PAD_START, current.right.menu, previous.right.menu);
     Edge(KEY_PAD_BACK, current.left.menu, previous.left.menu);
-    Edge(KEY_PAD_A, current.right.faceA, previous.right.faceA);
-    Edge(KEY_PAD_B, current.right.faceB, previous.right.faceB);
-    Edge(KEY_PAD_X, current.left.faceX, previous.left.faceX);
-    Edge(KEY_PAD_Y, current.left.faceY, previous.left.faceY);
-    Edge(KEY_PAD_RTHUMB, current.right.thumbClick, previous.right.thumbClick);
-    Edge(KEY_PAD_LTHUMB, current.left.thumbClick, previous.left.thumbClick);
     handPoses[0] = { current.left.pose.position, current.left.pose.orientation, current.left.pose.valid != RG_FALSE };
     handPoses[1] = { current.right.pose.position, current.right.pose.orientation, current.right.pose.valid != RG_FALSE };
     PollPointer(current, previous);
     previous = current;
+    previousSecondaryButtonMappings = secondaryMappings;
     previousFrameTime = current.frameTime;
 }
 
@@ -310,15 +507,18 @@ bool RT_OpenXRInputGetHandPose(int hand, RT_OpenXRHandPose* outPose)
     return outPose->valid;
 }
 
-void RT_OpenXRInputSetMovementYawRadians(float yaw)
-{
-    movementYawRadians = yaw;
-}
-
 void RT_OpenXRInputSetWorldHandPoses(const RT_OpenXRWorldHandPose (&poses)[2])
 {
     worldHandPoses[0] = poses[0];
     worldHandPoses[1] = poses[1];
+}
+
+bool RT_OpenXRInputGetMenuPointer(int* x, int* y)
+{
+    if (!pointerActive || x == nullptr || y == nullptr) return false;
+    *x = pointerX;
+    *y = pointerY;
+    return true;
 }
 
 bool RT_OpenXRInputGetWorldHandPose(int hand, RT_OpenXRWorldHandPose* outPose)

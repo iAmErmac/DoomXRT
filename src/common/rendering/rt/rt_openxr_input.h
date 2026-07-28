@@ -34,8 +34,8 @@ struct RT_OpenXRWorldHandPose
 };
 
 void RT_OpenXRInputSetWorldHandPoses(const RT_OpenXRWorldHandPose (&poses)[2]);
-void RT_OpenXRInputSetMovementYawRadians(float yaw);
 bool RT_OpenXRInputGetWorldHandPose(int hand, RT_OpenXRWorldHandPose* outPose);
+bool RT_OpenXRInputGetMenuPointer(int* x, int* y);
 
 bool RT_OpenXRInputGetHandPose(int hand, RT_OpenXRHandPose* outPose);
 bool RT_OpenXRInputIsHandGripping(int hand);

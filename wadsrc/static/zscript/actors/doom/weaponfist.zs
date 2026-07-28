@@ -72,7 +72,7 @@ extend class Actor
 		LineAttack (ang, range, pitch, damage, 'Melee', "BulletPuff", LAF_ISMELEEATTACK, t);
 
 		// turn to face target
-		if (t.linetarget)
+		if ((player != null && (!player.PlayInVR || (!multiplayer && vanilla_melee_attack))) && t.linetarget)
 		{
 			A_StartSound ("*fist", CHAN_WEAPON);
 			angle = t.angleFromSource;

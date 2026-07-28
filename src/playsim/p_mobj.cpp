@@ -5717,6 +5717,7 @@ AActor *FLevelLocals::SpawnPlayer (FPlayerStart *mthing, int playernum, int flag
 	}
 
 	p->DesiredFOV = p->FOV = fov;
+	p->PlayInVR = !multiplayer && VRMode::GetVRMode() != nullptr && VRMode::GetVRMode()->IsVR();
 	p->camera = p->mo;
 	p->playerstate = PST_LIVE;
 	p->refire = 0;
