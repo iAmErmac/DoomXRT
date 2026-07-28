@@ -68,6 +68,10 @@
 #include "i_interface.h"
 #include "d_main.h"
 
+#if HAVE_RT
+#include "rt/rt_openxr_input.h"
+#endif
+
 const float MY_SQRT2    = 1.41421356237309504880; // sqrt(2)
 // EXTERNAL DATA DECLARATIONS ----------------------------------------------
 
@@ -105,6 +109,8 @@ CVAR (Bool, r_deathcamera, false, CVAR_ARCHIVE)
 CVAR (Int, r_clearbuffer, 0, 0)
 CVAR (Bool, r_drawvoxels, true, 0)
 CVAR (Bool, r_drawplayersprites, true, 0)	// [RH] Draw player sprites?
+CVAR(Int, r_PlayerSprites3DMode, 1, CVAR_ARCHIVE);
+CVAR(Float, gl_fatItemWidth, 0.5f, CVAR_ARCHIVE);
 CVARD (Bool, r_radarclipper, false, CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_CHEAT, "Use the horizontal clipper from camera->tracer's perspective")
 CVARD (Bool, r_dithertransparency, false, CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_CHEAT, "Use dithered-transparency shading for actor-occluding level geometry")
 CUSTOM_CVAR(Float, r_quakeintensity, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
@@ -1062,6 +1068,12 @@ void R_SetupFrame(FRenderViewpoint& viewPoint, const FViewWindow& viewWindow, AA
 				iView->ViewOffset.Y += QuakePower(quakeFactor, jiggers.Intensity.Y, jiggers.Offset.Y);
 			if (jiggers.Intensity.Z || jiggers.Offset.Z)
 				iView->ViewOffset.Z += QuakePower(quakeFactor, jiggers.Intensity.Z, jiggers.Offset.Z);
+
+#if HAVE_RT
+			RT_OpenXRHapticQuake(
+				(float)QuakePower(0.8, jiggers.Intensity.X, jiggers.Offset.X),
+				(float)QuakePower(0.8, jiggers.Intensity.Y, jiggers.Offset.Y));
+#endif
 		}
 	}
 

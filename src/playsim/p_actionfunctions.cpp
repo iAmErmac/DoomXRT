@@ -85,6 +85,7 @@ static FRandom pr_burst ("Burst");
 static FRandom pr_monsterrefire ("MonsterRefire");
 static FRandom pr_teleport("A_Teleport");
 static FRandom pr_bfgselfdamage("BFGSelfDamage");
+CVAR(Bool, vr_recoil, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 	   FRandom pr_cajump("CustomJump");
 
 //==========================================================================

@@ -126,6 +126,7 @@
 #if HAVE_RT
 #include "rt/rt_state.h"
 #include "rt/rt_cvars.h"
+bool RT_OpenXRInputIsActive();
 void        RT_FirstStartDone();
 extern bool g_noinput_onstart;
 extern bool g_isremix;
@@ -2958,7 +2959,7 @@ static bool System_DispatchEvent(event_t* ev)
 
 	if (ev->type == EV_Mouse && menuactive == MENU_Off && ConsoleState != c_down && ConsoleState != c_falling && !primaryLevel->localEventManager->Responder(ev) && !paused)
 	{
-		if (buttonMap.ButtonDown(Button_Mlook) || freelook)
+		if ((buttonMap.ButtonDown(Button_Mlook) || freelook) && !RT_OpenXRInputIsActive())
 		{
 			int look = int(ev->y * m_pitch * 16.0);
 			G_AddViewPitch(look, true);

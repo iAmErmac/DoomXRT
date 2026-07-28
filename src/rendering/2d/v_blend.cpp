@@ -57,6 +57,7 @@ CVAR( Float, pickup_fade_scalar, 1.0f, CVAR_ARCHIVE )	// [SP] Uses same logic as
 CVAR(Float, powerup_fade_scalar, 1.0f, CVAR_ARCHIVE) // [Sal] Adjust screen fades for all inventory items
 #if HAVE_RT
 #include "rt/rt_state.h"
+#include "rt/rt_openxr_input.h"
 #endif
 
 // [RH] Amount of red flash for up to 114 damage points. Calculated by hand
@@ -139,6 +140,13 @@ void V_AddPlayerBlend (player_t *CPlayer, float blend[4], float maxinvalpha, int
 	if (CPlayer->bonuscount)
 	{
 		cnt = CPlayer->bonuscount << 3;
+
+#if HAVE_RT
+		if (CPlayer == CPlayer->mo->Level->GetConsolePlayer())
+		{
+			RT_OpenXRHapticPickup();
+		}
+#endif
 
 		// [SP] Allow player to tone down intensity of pickup flash.
 		cnt = (int)( cnt * pickup_fade_scalar );

@@ -62,6 +62,7 @@
 #include "events.h"
 #include "actorinlines.h"
 #include "d_main.h"
+#include "common/rendering/rt/rt_openxr_input.h"
 
 static FRandom pr_botrespawn ("BotRespawn");
 static FRandom pr_killmobj ("ActorDie");
@@ -1406,7 +1407,7 @@ static int DamageMobj (AActor *target, AActor *inflictor, AActor *source, int da
 		temp = damage < 100 ? damage : 100;
 		if (player == target->Level->GetConsolePlayer() )
 		{
-			//I_Tactile (40,10,40+temp*2);
+			RT_OpenXRHapticDamage(float(0.4 + 0.6 * (temp / 100.0)));
 		}
 	}
 	else if (!player)
@@ -1823,6 +1824,11 @@ void P_PoisonDamage (player_t *player, AActor *source, int damage, bool playPain
 		P_AutoUseHealth(player, damage - player->health+1);
 	}
 	player->health -= damage; // mirror mobj health here for Dave
+	if (player == target->Level->GetConsolePlayer())
+	{
+		const float amount = float(damage < 100 ? damage : 100);
+		RT_OpenXRHapticPoison(float(0.4 + 0.6 * (amount / 100.0)));
+	}
 	if (player->health < 50 && !deathmatch)
 	{
 		P_AutoUseStrifeHealth(player);

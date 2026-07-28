@@ -48,6 +48,7 @@
 #include "zvulkan/vulkanbuilders.h"
 #include "vulkan/textures/vk_imagetransition.h"
 #include "vulkan/renderer/vk_postprocess.h"
+#include "common/rendering/rt/rt_openxr_input.h"
 #include "vulkan/system/vk_renderdevice.h"
 #include "common/rendering/stereo3d/openxr/oxr_loader.h"
 
@@ -56,6 +57,25 @@ CVAR(Int, vr_mode, 0, CVAR_GLOBALCONFIG|CVAR_ARCHIVE)
 CVAR(Float, vr_snapTurn, 45.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_switch_sticks, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_move_use_offhand, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Int, vr_control_scheme, 0, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Int, vr_joy_mode, 1, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_secondary_button_mappings, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_two_handed_weapons, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_weaponRotate, -30.f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_weaponScale, 1.02f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_3dweaponOffsetX, 0.f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_3dweaponOffsetY, 0.f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_3dweaponOffsetZ, 0.f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_2dweaponOffsetX, 0.f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_2dweaponOffsetY, 0.f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_2dweaponOffsetZ, 0.f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_2dweaponScale, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_enable_haptics, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_pickup_haptic_level, 0.2f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_quake_haptic_level, 0.8f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_menu_pointer, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Color, vr_menu_pointer_color, 0xffffff, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_mouse_in_menu, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_teleport, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_momentum, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Float, vr_momentum_threshold, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
@@ -373,9 +393,89 @@ namespace
 			mCurrentSwapchainTexture = nullptr;
 			return true;
 		}
-		bool GetHandTransform(int, VSMatrix*) const override { return false; }
-		bool GetWeaponTransform(VSMatrix* out, int hand = VR_MAINHAND) const override { return VRMode::GetWeaponTransform(out, hand); }
-		bool RenderPlayerSpritesInScene() const override { return false; }
+		bool GetHandTransform(int hand, VSMatrix* out) const override
+		{
+			if (out == nullptr || hand < VR_MAINHAND || hand > VR_OFFHAND) return false;
+			const int trackedHand = ((vr_control_scheme < 10) == (hand == VR_MAINHAND)) ? 1 : 0;
+			RT_OpenXRWorldHandPose pose;
+			if (!RT_OpenXRInputGetWorldHandPose(trackedHand, &pose)) return false;
+			auto normalize = [](RgFloat3D v) {
+				const float length = std::sqrt(v.data[0] * v.data[0] + v.data[1] * v.data[1] + v.data[2] * v.data[2]);
+				return length > 0.0001f ? RgFloat3D{{ v.data[0] / length, v.data[1] / length, v.data[2] / length }} : RgFloat3D{};
+			};
+			const RgFloat3D forward = normalize(pose.forward);
+			const RgFloat3D up = normalize(pose.up);
+			const RgFloat3D right = normalize(RgFloat3D{{
+				forward.data[1] * up.data[2] - forward.data[2] * up.data[1],
+				forward.data[2] * up.data[0] - forward.data[0] * up.data[2],
+				forward.data[0] * up.data[1] - forward.data[1] * up.data[0],
+			}});
+			if (right.data[0] == 0.0f && right.data[1] == 0.0f && right.data[2] == 0.0f) return false;
+			const FLOATTYPE matrix[16] = {
+				right.data[0], right.data[1], right.data[2], 0.0f,
+				up.data[0], up.data[1], up.data[2], 0.0f,
+				-forward.data[0], -forward.data[1], -forward.data[2], 0.0f,
+				pose.position.data[0], pose.position.data[1], pose.position.data[2], 1.0f,
+			};
+			out->loadMatrix(matrix);
+			return true;
+		}
+		bool GetWeaponTransform(VSMatrix* out, int hand = VR_MAINHAND) const override
+		{
+			if (hand != VR_MAINHAND || !vr_two_handed_weapons) return GetHandTransform(hand, out);
+			const int mainHand = vr_control_scheme < 10 ? 1 : 0;
+			const int offHand = mainHand == 0 ? 1 : 0;
+			RT_OpenXRWorldHandPose mainPose, offPose;
+			if (!RT_OpenXRInputGetWorldHandPose(mainHand, &mainPose) ||
+				!RT_OpenXRInputGetWorldHandPose(offHand, &offPose) ||
+				!RT_OpenXRInputIsHandGripping(offHand)) return GetHandTransform(hand, out);
+			RgFloat3D forward{{
+				offPose.position.data[0] - mainPose.position.data[0],
+				offPose.position.data[1] - mainPose.position.data[1],
+				offPose.position.data[2] - mainPose.position.data[2],
+			}};
+			const float distance = std::sqrt(forward.data[0] * forward.data[0] + forward.data[1] * forward.data[1] + forward.data[2] * forward.data[2]);
+			if (distance <= 0.05f || distance >= 0.50f) return GetHandTransform(hand, out);
+			forward = {{ forward.data[0] / distance, forward.data[1] / distance, forward.data[2] / distance }};
+			RgFloat3D right{{
+				forward.data[1] * mainPose.up.data[2] - forward.data[2] * mainPose.up.data[1],
+				forward.data[2] * mainPose.up.data[0] - forward.data[0] * mainPose.up.data[2],
+				forward.data[0] * mainPose.up.data[1] - forward.data[1] * mainPose.up.data[0],
+			}};
+			const float rightLength = std::sqrt(right.data[0] * right.data[0] + right.data[1] * right.data[1] + right.data[2] * right.data[2]);
+			if (rightLength <= 0.0001f) return GetHandTransform(hand, out);
+			right = {{ right.data[0] / rightLength, right.data[1] / rightLength, right.data[2] / rightLength }};
+			const RgFloat3D up{{
+				right.data[1] * forward.data[2] - right.data[2] * forward.data[1],
+				right.data[2] * forward.data[0] - right.data[0] * forward.data[2],
+				right.data[0] * forward.data[1] - right.data[1] * forward.data[0],
+			}};
+			const FLOATTYPE matrix[16] = {
+				right.data[0], right.data[1], right.data[2], 0.0f,
+				up.data[0], up.data[1], up.data[2], 0.0f,
+				-forward.data[0], -forward.data[1], -forward.data[2], 0.0f,
+				mainPose.position.data[0], mainPose.position.data[1], mainPose.position.data[2], 1.0f,
+			};
+			out->loadMatrix(matrix);
+			return true;
+		}
+		bool RenderPlayerSpritesInScene() const override { return true; }
+		void AdjustPlayerSprites(FRenderState& state, int hand = VR_MAINHAND) const override
+		{
+			if (GetWeaponTransform(&state.mModelMatrix, hand))
+			{
+				const float scale = 0.04f * vr_weaponScale * vr_2dweaponScale;
+				state.mModelMatrix.scale(scale, -scale, scale);
+				state.mModelMatrix.translate(-screen->GetWidth() / 2, -screen->GetHeight() * 3 / 4, 0.0f);
+				constexpr float offsetFactor = 40.f;
+				state.mModelMatrix.translate(vr_2dweaponOffsetX * offsetFactor, -vr_2dweaponOffsetY * offsetFactor, vr_2dweaponOffsetZ * offsetFactor);
+			}
+			state.EnableModelMatrix(true);
+		}
+		void UnAdjustPlayerSprites(FRenderState& state) const override
+		{
+			state.EnableModelMatrix(false);
+		}
 		bool GetTeleportLocation(DVector3&) const override { return false; }
 		bool IsInitialized() const override { return EnsureInitialized(); }
 		bool RenderDesktopMirror(VulkanRenderDevice*, VulkanImage*) const override { return false; }
@@ -721,6 +821,34 @@ namespace
 	{
 		return rad * float(180. / M_PI);
 	}
+}
+
+bool RT_OpenXRGetWeaponTransform(VSMatrix* out, int hand)
+{
+	return vrmi_openxr.GetWeaponTransform(out, hand);
+}
+
+bool RT_OpenXRGetWeaponAim(DVector3* outOrigin, DVector3* outDirection)
+{
+	if (outOrigin == nullptr || outDirection == nullptr) return false;
+	VSMatrix transform;
+	if (!vrmi_openxr.GetWeaponTransform(&transform, VR_MAINHAND)) return false;
+	const FLOATTYPE* matrix = transform.get();
+	*outOrigin = DVector3(matrix[12], matrix[13], matrix[14]);
+	*outDirection = DVector3(-matrix[8], -matrix[9], -matrix[10]);
+	if (outDirection->LengthSquared() <= 0.000001) return false;
+	outDirection->MakeUnit();
+	return true;
+}
+
+void RT_OpenXRAdjustPlayerSprites(FRenderState& state, int hand)
+{
+	vrmi_openxr.AdjustPlayerSprites(state, hand);
+}
+
+void RT_OpenXRUnAdjustPlayerSprites(FRenderState& state)
+{
+	vrmi_openxr.UnAdjustPlayerSprites(state);
 }
 
 VREyeInfo::VREyeInfo(float shiftFactor, float scaleFactor)

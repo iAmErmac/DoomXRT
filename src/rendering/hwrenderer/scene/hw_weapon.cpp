@@ -33,6 +33,8 @@
 #include "g_levellocals.h"
 #include "models.h"
 #include "hw_weapon.h"
+#include "common/rendering/hwrenderer/data/hw_vrmodes.h"
+#include "common/rendering/rt/rt_openxr_input.h"
 #include "hw_fakeflat.h"
 #include "texturemanager.h"
 
@@ -57,6 +59,16 @@ EXTERN_CVAR(Float, transsouls)
 EXTERN_CVAR(Int, gl_fuzztype)
 EXTERN_CVAR(Bool, r_drawplayersprites)
 EXTERN_CVAR(Bool, r_deathcamera)
+EXTERN_CVAR(Int, r_PlayerSprites3DMode)
+EXTERN_CVAR(Float, gl_fatItemWidth)
+
+enum PlayerSprites3DMode
+{
+	CROSSED,
+	BACK_ONLY,
+	ITEM_ONLY,
+	FAT_ITEM,
+};
 
 
 //==========================================================================
@@ -92,7 +104,7 @@ void HWDrawInfo::DrawPSprite(HUDSprite *huds, FRenderState &state)
 
 	if (huds->mframe)
 	{
-		state.AlphaFunc(Alpha_GEqual, 0);
+		state.AlphaFunc(Alpha_GEqual, gl_mask_sprite_threshold);
 
 		FHWModelRenderer renderer(this, state, huds->lightindex);
 		RenderHUDModel(&renderer, huds->weapon, huds->translation, huds->rotation + FVector3(huds->mx / 4., (huds->my - WEAPONTOP) / -4., 0), huds->pivot, huds->mframe);
@@ -100,12 +112,125 @@ void HWDrawInfo::DrawPSprite(HUDSprite *huds, FRenderState &state)
 	}
 	else
 	{
-		float thresh = (huds->texture->GetTranslucency() || huds->OverrideShader != -1) ? 0.f : gl_mask_sprite_threshold;
+		auto vrmode = VRMode::GetVRModeCached(true);
+		RT_OpenXRWorldHandPose mainHand;
+		const bool tracked = vrmode->IsVR() || RT_OpenXRInputGetMainWorldHandPose(&mainHand);
+		float thresh = (huds->texture->GetTranslucency() || huds->OverrideShader != -1) && !tracked ? 0.f : gl_mask_sprite_threshold;
 		state.AlphaFunc(Alpha_GEqual, thresh);
 		FTranslationID trans = huds->weapon->GetTranslation();
 		if ((huds->weapon->Flags & PSPF_PLAYERTRANSLATED)) trans = huds->owner->Translation;
-		state.SetMaterial(huds->texture, UF_Sprite, CTF_Expand, CLAMP_XY_NOMIP, trans, huds->OverrideShader);
-		state.Draw(DT_TriangleStrip, huds->mx, 4);
+
+		if (r_PlayerSprites3DMode != ITEM_ONLY && r_PlayerSprites3DMode != FAT_ITEM)
+		{
+			state.SetMaterial(huds->texture, UF_Sprite, CTF_Expand, CLAMP_XY_NOMIP, trans, huds->OverrideShader);
+			state.Draw(DT_TriangleStrip, huds->mx, 4);
+		}
+
+		DPSprite* psp = huds->weapon;
+		FTextureID lump;
+		bool mirror;
+		if (psp->GetCaller() != nullptr)
+		{
+			FState* spawn = psp->GetCaller()->FindState(NAME_Spawn);
+			lump = sprites[spawn->sprite].GetSpriteFrame(0, 0, nullAngle, &mirror);
+		}
+		else lump.SetNull();
+
+		auto gtex = TexMan.GetGameTexture(lump, false);
+		FMaterial* tex = FMaterial::ValidateTexture(gtex, true, false);
+
+		if (psp->GetID() == PSP_WEAPON
+		&& tracked
+		&& r_PlayerSprites3DMode != BACK_ONLY
+		&& psp->GetCaller() != nullptr
+		&& tex != nullptr
+		&& lump.isValid())
+		{
+			float vw = (float)viewwidth;
+			float vh = (float)viewheight;
+
+			state.AlphaFunc(Alpha_GEqual, 1);
+			state.SetMaterial(gtex, UF_Sprite, CTF_Expand, CLAMP_XY_NOMIP, trans, huds->OverrideShader);
+
+			auto spi = gtex->GetSpritePositioning(0);
+
+			float fU1, fV1;
+			float fU2, fV2;
+			float z1 = 0.0f;
+			float z2 = (huds->y2 - huds->y1) * std::min<float>(3.0f, float(spi.spriteWidth) / float(spi.spriteHeight));
+
+			if (!(mirror) != !(psp->Flags & PSPF_FLIP))
+			{
+				fU2 = spi.GetSpriteUL();
+				fV1 = spi.GetSpriteVT();
+				fU1 = spi.GetSpriteUR();
+				fV2 = spi.GetSpriteVB();
+			}
+			else
+			{
+				fU1 = spi.GetSpriteUL();
+				fV1 = spi.GetSpriteVT();
+				fU2 = spi.GetSpriteUR();
+				fV2 = spi.GetSpriteVB();
+			}
+
+			if (r_PlayerSprites3DMode == FAT_ITEM)
+			{
+				float x1 = vw / 2 + (huds->x1 - vw / 2) * gl_fatItemWidth;
+				float x2 = vw / 2 + (huds->x2 - vw / 2) * gl_fatItemWidth;
+
+				float inc = (x2 - x1) / 12.0f;
+				for (float x = x1; x < x2; x += inc)
+				{
+					screen->mVertexData->Map();
+					auto vert = screen->mVertexData->AllocVertices(4);
+					auto vp = vert.first;
+					vp[0].Set(x, huds->y1, -z1, fU1, fV1);
+					vp[1].Set(x, huds->y2, -z1, fU1, fV2);
+					vp[2].Set(x, huds->y1, -z2, fU2, fV1);
+					vp[3].Set(x, huds->y2, -z2, fU2, fV2);
+					screen->mVertexData->Unmap();
+					state.Draw(DT_TriangleStrip, vert.second, 4, x == x1);
+				}
+			}
+			else
+			{
+				float sy;
+				float crossAt;
+				if (r_PlayerSprites3DMode == ITEM_ONLY)
+				{
+					crossAt = 0.0f;
+					sy = 0.0f;
+				}
+				else
+				{
+					sy = huds->y2 - huds->y1;
+					crossAt = sy * 0.25f;
+				}
+
+				float y1 = huds->y1 - crossAt;
+				float y2 = huds->y2 - crossAt;
+
+				screen->mVertexData->Map();
+				auto vert = screen->mVertexData->AllocVertices(4);
+				auto vp = vert.first;
+				vp[0].Set(vw / 2 - crossAt, y1, -z1, fU1, fV1);
+				vp[1].Set(vw / 2 + sy / 2, y2, -z1, fU1, fV2);
+				vp[2].Set(vw / 2 - crossAt, y1, -z2, fU2, fV1);
+				vp[3].Set(vw / 2 + sy / 2, y2, -z2, fU2, fV2);
+
+				auto vert2 = screen->mVertexData->AllocVertices(4);
+				auto vp2 = vert2.first;
+				vp2[0].Set(vw / 2 + crossAt, y1, -z1, fU1, fV1);
+				vp2[1].Set(vw / 2 - sy / 2, y2, -z1, fU1, fV2);
+				vp2[2].Set(vw / 2 + crossAt, y1, -z2, fU2, fV1);
+				vp2[3].Set(vw / 2 - sy / 2, y2, -z2, fU2, fV2);
+
+				screen->mVertexData->Unmap();
+				state.Draw(DT_TriangleStrip, vert.second, 4, true);
+				state.Draw(DT_TriangleStrip, vert2.second, 4, false);
+			}
+		}
 	}
 
 	state.SetTextureMode(TM_NORMAL);
@@ -127,6 +252,7 @@ void HWDrawInfo::DrawPlayerSprites(bool hudModelStep, FRenderState &state)
 	auto oldlightmode = lightmode;
 	if (!hudModelStep && isSoftwareLighting(oldlightmode)) SetFallbackLightMode();	// Software lighting cannot handle 2D content.
 #if HAVE_RT
+	auto vrmode = VRMode::GetVRModeCached(true);
 	uint32_t i = hudModelStep ? 4 : 0;
 	assert(hudsprites.Size() < 4);
 #endif
@@ -149,8 +275,23 @@ void HWDrawInfo::DrawPlayerSprites(bool hudModelStep, FRenderState &state)
 			float(hudsprite.owner ? hudsprite.owner->Angles.Yaw.Radians() : 0.0f));
 #endif
 
-		if ((!!hudsprite.mframe) == hudModelStep)
+		RT_OpenXRWorldHandPose mainHand;
+		const bool rtTracked = RT_OpenXRInputGetMainWorldHandPose(&mainHand);
+		if (vrmode->IsVR() || rtTracked || (!!hudsprite.mframe) == hudModelStep)
+		{
+			const bool trackedSprite = (vrmode->IsVR() || rtTracked) && !hudsprite.mframe;
+			if (trackedSprite)
+			{
+				if (vrmode->IsVR()) vrmode->AdjustPlayerSprites(state);
+				else RT_OpenXRAdjustPlayerSprites(state);
+			}
 			DrawPSprite(&hudsprite, state);
+			if (trackedSprite)
+			{
+				if (vrmode->IsVR()) vrmode->UnAdjustPlayerSprites(state);
+				else RT_OpenXRUnAdjustPlayerSprites(state);
+			}
+		}
 	}
 	lightmode = oldlightmode;
 }
@@ -188,6 +329,10 @@ static WeaponPosition2D GetWeaponPosition2D(player_t *player, double ticFrac)
 {
 	WeaponPosition2D w;
 	P_BobWeapon(player, &w.bobx, &w.boby, ticFrac);
+#if HAVE_RT
+	RT_OpenXRWorldHandPose mainHand;
+	if (RT_OpenXRInputGetMainWorldHandPose(&mainHand)) w.bobx = w.boby = 0.0f;
+#endif
 
 	// Interpolate the main weapon layer once so as to be able to add it to other layers.
 	if ((w.weapon = player->FindPSprite(PSP_WEAPON)) != nullptr)
@@ -215,6 +360,14 @@ static WeaponPosition3D GetWeaponPosition3D(player_t *player, double ticFrac)
 {
 	WeaponPosition3D w;
 	P_BobWeapon3D(player, &w.translation, &w.rotation, ticFrac);
+#if HAVE_RT
+	RT_OpenXRWorldHandPose mainHand;
+	if (RT_OpenXRInputGetMainWorldHandPose(&mainHand))
+	{
+		w.translation = {};
+		w.rotation = {};
+	}
+#endif
 
 	// Interpolate the main weapon layer once so as to be able to add it to other layers.
 	if ((w.weapon = player->FindPSprite(PSP_WEAPON)) != nullptr)
@@ -679,6 +832,10 @@ bool HUDSprite::GetWeaponRect(HWDrawInfo *di, DPSprite *psp, float sx, float sy,
 		Vert.v[3].X < vw))
 		return false;
 	*/
+	this->x1 = Vert.v[0].X;
+	this->y1 = Vert.v[0].Y;
+	this->x2 = Vert.v[2].X;
+	this->y2 = Vert.v[1].Y;
 	auto verts = screen->mVertexData->AllocVertices(4);
 	mx = verts.second;
 

@@ -39,6 +39,7 @@
 #include "hw_clock.h"
 #include "hw_cvars.h"
 #include "hw_viewpointbuffer.h"
+#include "common/rendering/rt/rt_openxr_input.h"
 #include "flatvertices.h"
 #include "hw_lightbuffer.h"
 #include "hw_bonebuffer.h"
@@ -726,8 +727,10 @@ void HWDrawInfo::EndDrawScene(sector_t * viewsector, FRenderState &state)
 	}*/
 
 	// [BB] HUD models need to be rendered here. 
+	RT_OpenXRWorldHandPose mainHand;
+	const bool renderTrackedSprites = RT_OpenXRInputGetMainWorldHandPose(&mainHand);
 	const bool renderHUDModel = IsHUDModelForPlayerAvailable(players[consoleplayer].camera->player);
-	if (renderHUDModel)
+	if (!renderTrackedSprites && renderHUDModel)
 	{
 		// [BB] The HUD model should be drawn over everything else already drawn.
 		state.Clear(CT_Depth);
@@ -749,6 +752,8 @@ void HWDrawInfo::DrawEndScene2D(sector_t * viewsector, FRenderState &state)
 	const bool renderHUDModel = IsHUDModelForPlayerAvailable(players[consoleplayer].camera->player);
 	auto vrmode = VRMode::GetVRModeCached(true);
 
+	RT_OpenXRWorldHandPose mainHand;
+	const bool renderTrackedSprites = RT_OpenXRInputGetMainWorldHandPose(&mainHand);
 	HWViewpointUniforms vp = VPUniforms;
 	vp.mViewMatrix.loadIdentity();
 	vp.mProjectionMatrix = vrmode->GetHUDProjection();
@@ -756,7 +761,8 @@ void HWDrawInfo::DrawEndScene2D(sector_t * viewsector, FRenderState &state)
 	state.EnableDepthTest(false);
 	state.EnableMultisampling(false);
 
-	DrawPlayerSprites(false, state);
+	if (!renderTrackedSprites)
+		DrawPlayerSprites(false, state);
 
 	state.SetNoSoftLightLevel();
 
@@ -839,6 +845,12 @@ void HWDrawInfo::DrawScene(int drawmode)
 #endif
 
 	RenderScene(RenderState);
+
+	RT_OpenXRWorldHandPose mainHand;
+	if (drawmode == DM_MAINVIEW && RT_OpenXRInputGetMainWorldHandPose(&mainHand))
+	{
+		DrawPlayerSprites(IsHUDModelForPlayerAvailable(players[consoleplayer].camera->player), RenderState);
+	}
 
 	if (applySSAO && RenderState.GetPassType() == GBUFFER_PASS)
 	{

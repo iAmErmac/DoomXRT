@@ -46,6 +46,7 @@
 #include "v_video.h"
 #include "hw_bonebuffer.h"
 #include "actorinlines.h"
+#include "hw_vrmodes.h"
 
 
 #ifdef _MSC_VER
@@ -54,6 +55,10 @@
 
 CVAR(Bool, gl_interpolate_model_frames, true, CVAR_ARCHIVE)
 EXTERN_CVAR (Bool, r_drawvoxels)
+EXTERN_CVAR(Float, vr_weaponScale)
+EXTERN_CVAR(Float, vr_3dweaponOffsetX)
+EXTERN_CVAR(Float, vr_3dweaponOffsetY)
+EXTERN_CVAR(Float, vr_3dweaponOffsetZ)
 
 extern TDeletingArray<FVoxel *> Voxels;
 extern TDeletingArray<FVoxelDef *> VoxelDefs;
@@ -221,6 +226,13 @@ void RenderHUDModel(FModelRenderer *renderer, DPSprite *psp, FVector3 translatio
 	// The model position and orientation has to be drawn independently from the position of the player,
 	// but we need to position it correctly in the world for light to work properly.
 	VSMatrix objectToWorldMatrix = renderer->GetViewToWorldMatrix();
+	constexpr int hand = VR_MAINHAND;
+	if (RT_OpenXRGetWeaponTransform(&objectToWorldMatrix, hand))
+	{
+		const float scale = 0.01f * vr_weaponScale;
+		objectToWorldMatrix.scale(scale, scale, scale);
+		objectToWorldMatrix.translate(0, 5, 30);
+	}
 
 	// [Nash] Optional scale weapon FOV
 	float fovscale = 1.0f;
@@ -235,6 +247,9 @@ void RenderHUDModel(FModelRenderer *renderer, DPSprite *psp, FVector3 translatio
 
 	// Aplying model offsets (model offsets do not depend on model scalings).
 	objectToWorldMatrix.translate(smf->xoffset / smf->xscale, smf->zoffset / smf->zscale, smf->yoffset / smf->yscale);
+
+	// Applying player custom offsets
+	objectToWorldMatrix.translate(-vr_3dweaponOffsetX, vr_3dweaponOffsetY, vr_3dweaponOffsetZ);
 
 	// [BB] Weapon bob, very similar to the normal Doom weapon bob.
 

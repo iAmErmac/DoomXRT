@@ -66,6 +66,8 @@ struct VRMode
 	virtual void AdjustViewport(DFrameBuffer *fb) const;
 	virtual VSMatrix GetHUDProjection() const;
 	VSMatrix GetHUDSpriteProjection() const;
+	virtual void AdjustPlayerSprites(FRenderState& state, int hand = VR_MAINHAND) const {}
+	virtual void UnAdjustPlayerSprites(FRenderState& state) const {}
 	virtual bool IsVR() const { return false; }
 	virtual bool GetRecommendedRenderSize(int& outWidth, int& outHeight) const { outWidth = 0; outHeight = 0; return false; }
 	virtual bool ShouldUseRecommendedRenderSizeThisFrame() const { return false; }
@@ -90,3 +92,7 @@ struct VRMode
 	virtual bool GetTeleportLocation(DVector3& out) const { return false; }
 	virtual bool IsInitialized() const { return true; }
 };
+bool RT_OpenXRGetWeaponTransform(VSMatrix* out, int hand = VR_MAINHAND);
+bool RT_OpenXRGetWeaponAim(DVector3* outOrigin, DVector3* outDirection);
+void RT_OpenXRAdjustPlayerSprites(FRenderState& state, int hand = VR_MAINHAND);
+void RT_OpenXRUnAdjustPlayerSprites(FRenderState& state);

@@ -83,6 +83,8 @@ EXTERN_CVAR( Float, vr_ipd )
 EXTERN_CVAR( Bool, vr_swap_eyes )
 EXTERN_CVAR( Float, vr_snapTurn )
 EXTERN_CVAR( Bool, vr_switch_sticks )
+EXTERN_CVAR( Int, vr_control_scheme )
+EXTERN_CVAR( Float, movebob )
 
 extern uint64_t g_vr_virtual_screen_recenter_request;
 
@@ -1841,6 +1843,19 @@ private:
     auto MakeFirstPersonQuadInWorldSpace( std::span< const RgPrimitiveVertex > verts )
         -> std::pair< RgTransform, std::span< const RgPrimitiveVertex > >
     {
+        if( mModelMatrixEnabled )
+        {
+            // Convert HUD vertex axes to model-matrix local space.
+            m_tempverts.assign( verts.begin(), verts.end() );
+            for( RgPrimitiveVertex& vert : m_tempverts )
+            {
+                const float depth = vert.position[ 1 ];
+                vert.position[ 1 ] = vert.position[ 2 ];
+                vert.position[ 2 ] = depth;
+            }
+            return { MakeTransform( false ), m_tempverts };
+        }
+
         if( verts.size() != 4 )
         {
             // assert( 0 );
@@ -2248,15 +2263,20 @@ public:
         RgResult r = rt.rgUploadCamera( &info );
         RG_CHECK( r );
 
-        if( rt.rgUploadStereoCameraEXT && g_rtOpenXRFrameStateValid &&
-            g_rtOpenXRFrameState.requestedPresentationMode == RG_OPENXR_PRESENTATION_MODE_STEREO_PROJECTION_EXT &&
-            g_rtOpenXRFrameState.eyes[ 0 ].pose.valid && g_rtOpenXRFrameState.eyes[ 1 ].pose.valid &&
-            g_rtOpenXRFrameState.headPose.valid )
+        if( g_rtOpenXRFrameStateValid && g_rtOpenXRFrameState.headPose.valid )
         {
+
+            movebob = 0.0f;
             if( !g_rtOpenXRRecenterValid )
             {
+                // Keep the game world level: recenter only the HMD yaw, while
+                // leaving pitch and roll available for normal head tracking.
+                const auto& orientation = g_rtOpenXRFrameState.headPose.orientation;
+                const float forwardX = -2.0f * ( orientation.data[ 0 ] * orientation.data[ 2 ] + orientation.data[ 1 ] * orientation.data[ 3 ] );
+                const float forwardZ = -1.0f + 2.0f * ( orientation.data[ 0 ] * orientation.data[ 0 ] + orientation.data[ 1 ] * orientation.data[ 1 ] );
+                const float yaw = std::atan2( forwardX, -forwardZ );
                 g_rtOpenXRRecenterPosition = g_rtOpenXRFrameState.headPose.position;
-                g_rtOpenXRRecenterOrientation = g_rtOpenXRFrameState.headPose.orientation;
+                g_rtOpenXRRecenterOrientation = RgQuaternion{{ 0.0f, std::sin( yaw * 0.5f ), 0.0f, std::cos( yaw * 0.5f ) }};
                 g_rtOpenXRRecenterValid = true;
             }
 
@@ -2276,6 +2296,8 @@ public:
             };
             const auto recenterInverse = RgQuaternion{{ -g_rtOpenXRRecenterOrientation.data[ 0 ], -g_rtOpenXRRecenterOrientation.data[ 1 ], -g_rtOpenXRRecenterOrientation.data[ 2 ], g_rtOpenXRRecenterOrientation.data[ 3 ] }};
             const auto headOrientation = quaternionMultiply( recenterInverse, g_rtOpenXRFrameState.headPose.orientation );
+            const RgFloat3D headForward = quaternionRotate( headOrientation, RgFloat3D{{ 0.0f, 0.0f, -1.0f }} );
+            RT_OpenXRInputSetMovementYawRadians( std::atan2( headForward.data[ 0 ], -headForward.data[ 2 ] ) );
             const auto mapToWorld = [ & ]( const RgFloat3D& local ) {
                 return RgFloat3D{{
                     right.data[ 0 ] * local.data[ 0 ] + up.data[ 0 ] * local.data[ 1 ] - forward.data[ 0 ] * local.data[ 2 ],
@@ -2286,6 +2308,29 @@ public:
             const auto mapTracking = [ & ]( const RgFloat3D& trackingVector ) {
                 return mapToWorld( quaternionRotate( recenterInverse, trackingVector ) );
             };
+            RT_OpenXRWorldHandPose worldHands[2]{};
+            for (int hand = 0; hand < 2; ++hand)
+            {
+                RT_OpenXRHandPose rawHand;
+                if (!RT_OpenXRInputGetHandPose(hand, &rawHand)) continue;
+                const RgFloat3D relative{{
+                    rawHand.position.data[0] - g_rtOpenXRRecenterPosition.data[0],
+                    rawHand.position.data[1] - g_rtOpenXRRecenterPosition.data[1],
+                    rawHand.position.data[2] - g_rtOpenXRRecenterPosition.data[2],
+                }};
+                const RgFloat3D position = mapTracking(relative);
+                const RgFloat3D localForward = quaternionRotate(rawHand.orientation, RgFloat3D{{ 0.0f, 0.0f, -1.0f }});
+                const RgFloat3D localUp = quaternionRotate(rawHand.orientation, RgFloat3D{{ 0.0f, 1.0f, 0.0f }});
+                worldHands[hand].position = {{
+                    float(viewpoint.Pos.X) + position.data[0] * float(vr_hunits_per_meter),
+                    float(viewpoint.Pos.Y) + position.data[1] * float(vr_hunits_per_meter),
+                    float(viewpoint.Pos.Z) + position.data[2] * float(vr_hunits_per_meter),
+                }};
+                worldHands[hand].forward = mapTracking(localForward);
+                worldHands[hand].up = mapTracking(localUp);
+                worldHands[hand].valid = true;
+            }
+            RT_OpenXRInputSetWorldHandPoses(worldHands);
             const float worldUnitsPerMeter = std::max( float( vr_hunits_per_meter ) * float( ONEGAMEUNIT_IN_METERS ), 0.001f );
             const RgFloat3D headTranslation{{
                 (g_rtOpenXRFrameState.headPose.position.data[ 0 ] - g_rtOpenXRRecenterPosition.data[ 0 ]) * worldUnitsPerMeter,
@@ -2325,7 +2370,12 @@ public:
             const auto& rightEye = g_rtOpenXRFrameState.eyes[ 1 ];
             stereo.left = makeEye( leftEye, eyeProjections[ 0 ] );
             stereo.right = makeEye( rightEye, eyeProjections[ 1 ] );
-            RG_CHECK( rt.rgUploadStereoCameraEXT( &stereo ) );
+            if( rt.rgUploadStereoCameraEXT &&
+                g_rtOpenXRFrameState.requestedPresentationMode == RG_OPENXR_PRESENTATION_MODE_STEREO_PROJECTION_EXT &&
+                g_rtOpenXRFrameState.eyes[ 0 ].pose.valid && g_rtOpenXRFrameState.eyes[ 1 ].pose.valid )
+            {
+                RG_CHECK( rt.rgUploadStereoCameraEXT( &stereo ) );
+            }
         }
 
 

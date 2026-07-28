@@ -63,6 +63,8 @@
 #include "m_random.h"
 #include "doomdef.h"
 #include "p_local.h"
+#include "common/rendering/hwrenderer/data/hw_vrmodes.h"
+#include "common/rendering/rt/rt_openxr_input.h"
 #include "p_maputl.h"
 #include "p_lnspec.h"
 #include "p_effect.h"
@@ -939,6 +941,10 @@ bool P_GiveBody(AActor *actor, int num, int max)
 					player->health = max;
 				}
 				actor->health = player->health;
+				if (player == actor->Level->GetConsolePlayer())
+				{
+					RT_OpenXRHapticHeal(float(0.4 + 0.6 * (num / 100.0)));
+				}
 				return true;
 			}
 		}
@@ -7491,6 +7497,15 @@ AActor *P_SpawnPlayerMissile (AActor *source, double x, double y, double z,
 		}
 	}
 
+	DVector3 trackedOrigin, trackedDirection;
+	const bool trackedWeaponAim = source->player == &players[consoleplayer] &&
+		RT_OpenXRGetWeaponAim(&trackedOrigin, &trackedDirection);
+	if (trackedWeaponAim)
+	{
+		an = trackedDirection.Angle();
+		pitch = trackedDirection.Pitch();
+	}
+
 	if (z != ONFLOORZ && z != ONCEILINGZ)
 	{
 		// Doom spawns missiles 4 units lower than hitscan attacks for players.
@@ -7501,7 +7516,7 @@ AActor *P_SpawnPlayerMissile (AActor *source, double x, double y, double z,
 			z = source->floorz;
 		}
 	}
-	DVector3 pos = source->Vec2OffsetZ(x, y, z);
+	DVector3 pos = trackedWeaponAim ? trackedOrigin : source->Vec2OffsetZ(x, y, z);
 	AActor *MissileActor = Spawn (source->Level, type, pos, ALLOW_REPLACE);
 	if (pMissileActor) *pMissileActor = MissileActor;
 	P_PlaySpawnSound(MissileActor, source);
@@ -7522,6 +7537,11 @@ AActor *P_SpawnPlayerMissile (AActor *source, double x, double y, double z,
 	}
 	if (P_CheckMissileSpawn (MissileActor, source->radius))
 	{
+		if ((MissileActor->DamageFunc != nullptr || MissileActor->DamageType != NAME_None || MissileActor->SeeSound != NO_SOUND) &&
+			source->player == source->Level->GetConsolePlayer())
+		{
+			RT_OpenXRHapticWeaponFire();
+		}
 		return MissileActor;
 	}
 	return NULL;

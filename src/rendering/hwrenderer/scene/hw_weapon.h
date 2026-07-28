@@ -52,6 +52,7 @@ struct HUDSprite
 	float alpha;
 	int OverrideShader;
 
+	float x1, y1, x2, y2;
 	float mx, my;
 	float dynrgb[3];
 

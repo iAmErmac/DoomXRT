@@ -69,6 +69,8 @@
 
 #include "doomdef.h"
 #include "p_local.h"
+#include "common/rendering/hwrenderer/data/hw_vrmodes.h"
+#include "common/rendering/rt/rt_openxr_input.h"
 #include "p_spec.h"
 #include "d_player.h"
 #include "p_maputl.h"
@@ -4724,12 +4726,25 @@ AActor *P_LineAttack(AActor *t1, DAngle angle, double distance,
 
 	direction = { pc * angle.Cos(), pc * angle.Sin(), -pitch.Sin() };
 	shootz = t1->Center() - t1->Floorclip + t1->AttackOffset();
+	DVector3 trackedOrigin;
+	const bool trackedWeaponAim = t1->player == &players[consoleplayer] &&
+		RT_OpenXRGetWeaponAim(&trackedOrigin, &direction);
+	if (trackedWeaponAim)
+	{
+		angle = direction.Angle();
+		pitch = direction.Pitch();
+		shootz = trackedOrigin.Z;
+	}
 
 	if (t1->player != NULL)
 	{
 		// this is coming from a weapon attack function which needs to transfer information to the obituary code,
 		// We need to preserve this info from the damage type because the actual damage type can get overridden by the puff
 		pflag = DMG_PLAYERATTACK;
+		if (damage > 0 && t1->player == t1->Level->GetConsolePlayer())
+		{
+			RT_OpenXRHapticWeaponFire();
+		}
 	}
 
 	// [MC] If overriding, set it to the base of the actor.
@@ -4803,7 +4818,11 @@ AActor *P_LineAttack(AActor *t1, DAngle angle, double distance,
 	DVector3 tempos;
 	DVector3 puffpos;
 
-	if (flags & LAF_ABSPOSITION)
+	if (trackedWeaponAim && !(flags & (LAF_ABSPOSITION | LAF_ABSOFFSET)) && offsetforward == 0.0 && offsetside == 0.0)
+	{
+		tempos = trackedOrigin;
+	}
+	else if (flags & LAF_ABSPOSITION)
 	{
 		tempos = DVector3(offsetforward, offsetside, sz);
 	}
@@ -5520,6 +5539,10 @@ void P_RailAttack(FRailParams *p)
 	if (source->Level->localEventManager->WorldRailgunPreFired(damagetype, puffclass, p))
 	{
 		return;
+	}
+	if (p->damage > 0 && source->player == source->Level->GetConsolePlayer())
+	{
+		RT_OpenXRHapticWeaponFire();
 	}
 
 	DVector3 start;

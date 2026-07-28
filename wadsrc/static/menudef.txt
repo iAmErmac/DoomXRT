@@ -2703,6 +2703,27 @@ OptionMenu "OpenGLOptions" protected
 	Option "$GLPREFMNU_MULTISAMPLE", 			gl_multisample,					"Multisample"
 }
 
+OptionValue ControlMode
+{
+	0, "GZDoom VR"
+	1, "QuestZDoom"
+}
+
+OptionValue Sprites3DMode
+{
+	0, "X Sprite"
+	1, "Back Sprite"
+	2, "Sprite Only"
+	3, "Fat Sprite"
+}
+
+OptionValue ControlScheme
+{
+	0, "Right-handed"
+	10, "Left-handed A"
+	11, "Left-handed B"
+}
+
 OptionMenu "VROptionsMenu" protected
 {
 	Title "$VRPREFMNU_TITLE"
@@ -2710,12 +2731,21 @@ OptionMenu "VROptionsMenu" protected
 	Submenu "$VRPREFMNU_PRESENTATION", "VRPresentationMenu"
 	Submenu "$VRPREFMNU_CINEMA_SCREEN", "VRCinemaScreenMenu"
 	Submenu "$VRPREFMNU_RAYTRACING_PERF", "VRRayTracingPerfMenu"
+	Submenu "Weapon Options", "VRWeaponOptions"
 	StaticText " "
 
 	StaticText "$VRPREFMNU_PLANNED", 1
 	StaticText "$VRPREFMNU_PLANNED_MULTIVIEW", 1
 	StaticText "Locomotion", gold
 	Option "Off-hand Move Direction", vr_move_use_offhand, "OnOff"
+	Option "Control Scheme", vr_control_scheme, "ControlScheme"
+	Option "Control Mode", vr_joy_mode, "ControlMode"
+	Option "Secondary Button Mappings", vr_secondary_button_mappings, "OnOff"
+	Option "Two-Handed Weapons", vr_two_handed_weapons, "OnOff"
+	Option "Enable Haptics", vr_enable_haptics, "OnOff"
+	Option "Menu Pointer", vr_menu_pointer, "OnOff"
+	Option "Virtual Mouse In Menu", vr_mouse_in_menu, "OnOff"
+	ColorPicker "Menu Pointer Colour", vr_menu_pointer_color
 	Option "Use Teleport", vr_teleport, "OnOff"
 	Option "Slidey Movement / Momentum", vr_momentum, "OnOff"
 	ScaleSlider "Walk Speed", vr_move_speed, 0, 50, 1, "Multiplier Active"
@@ -2726,8 +2756,41 @@ OptionMenu "VROptionsMenu" protected
 	Slider "Snap Turn Angle", vr_snapTurn, 0.0, 90.0, 1.0, 2
 	StaticText "0-10 enables smooth turning; higher values set snap angle.", brown
 	StaticText " "
-	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_move_use_offhand vr_teleport vr_momentum vr_move_speed vr_walk_multiplier vr_run_multiplier vr_snapTurn"
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_control_scheme vr_joy_mode vr_secondary_button_mappings vr_two_handed_weapons vr_enable_haptics vr_menu_pointer vr_menu_pointer_color vr_mouse_in_menu vr_move_use_offhand vr_teleport vr_momentum vr_move_speed vr_walk_multiplier vr_run_multiplier vr_snapTurn"
 	StaticText "$VRPREFMNU_PLANNED_SAMPLING", 1
+}
+
+OptionMenu "VRWeaponOptions" protected
+{
+	Title "Weapon Options"
+	StaticText ""
+	StaticText "Global Options", gold
+	Option "Enable Recoil", vr_recoil, "OnOff"
+	Option "Enable Haptics", vr_enable_haptics, "OnOff"
+	Command "Test Haptics", "vr_haptic_test"
+	Slider "Pickup Haptic Level", vr_pickup_haptic_level, 0.0, 1.0, 0.1, 2
+	Slider "Quake Haptic Level", vr_quake_haptic_level, 0.0, 1.0, 0.1, 2
+	Slider "Pitch Adjust", vr_weaponRotate, -45, 45, 5, 2
+	Slider "Weapon Scale", vr_weaponScale, 0.1, 3.0, 0.1, 2
+	StaticText " "
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_recoil vr_enable_haptics vr_pickup_haptic_level vr_quake_haptic_level vr_weaponRotate vr_weaponScale"
+	StaticText " "
+	StaticText "3D Model Options", gold
+	Slider "X Offset", vr_3dweaponOffsetX, -10, 10, 0.1, 2
+	Slider "Y Offset", vr_3dweaponOffsetY, -10, 10, 0.1, 2
+	Slider "Z Offset", vr_3dweaponOffsetZ, -10, 10, 0.1, 2
+	StaticText " "
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_3dweaponOffsetX vr_3dweaponOffsetY vr_3dweaponOffsetZ"
+	StaticText " "
+	StaticText "Sprite Options", gold
+	Option "Sprite Mode", r_PlayerSprites3DMode, "Sprites3DMode"
+	Slider "Fat Sprite Width", gl_fatItemWidth, 0.1, 1.0, 0.1, 2
+	Slider "X Offset", vr_2dweaponOffsetX, -10, 10, 0.1, 2
+	Slider "Y Offset", vr_2dweaponOffsetY, -10, 10, 0.1, 2
+	Slider "Z Offset", vr_2dweaponOffsetZ, -10, 10, 0.1, 2
+	Slider "Sprite Scale", vr_2dweaponScale, 0, 2.0, 0.1, 1
+	StaticText " "
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar r_PlayerSprites3DMode gl_fatItemWidth vr_2dweaponOffsetX vr_2dweaponOffsetY vr_2dweaponOffsetZ vr_2dweaponScale"
 }
 
 OptionMenu "VRPresentationMenu" protected
