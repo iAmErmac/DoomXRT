@@ -2321,8 +2321,8 @@ public:
                 result.pProjection = projection.data();
                 return result;
             };
-            const auto& leftEye = g_rtOpenXRFrameState.eyes[ vr_swap_eyes ? 1 : 0 ];
-            const auto& rightEye = g_rtOpenXRFrameState.eyes[ vr_swap_eyes ? 0 : 1 ];
+            const auto& leftEye = g_rtOpenXRFrameState.eyes[ 0 ];
+            const auto& rightEye = g_rtOpenXRFrameState.eyes[ 1 ];
             stereo.left = makeEye( leftEye, eyeProjections[ 0 ] );
             stereo.right = makeEye( rightEye, eyeProjections[ 1 ] );
             RG_CHECK( rt.rgUploadStereoCameraEXT( &stereo ) );
@@ -3860,6 +3860,7 @@ void RTFrameBuffer::RT_BeginFrame()
             .version = RG_OPENXR_PRESENTATION_EXT_VERSION,
             .presentationMode = requestedPresentation,
             .mirrorMode = requestedMirror,
+            .swapEyes = static_cast< RgBool32 >( vr_swap_eyes ? 1 : 0 ),
             .eyeRenderScale = std::clamp( float( vr_openxr_render_scale ), 0.25f, 2.0f ),
             .fovAdjustment = float( vr_openxr_fov_adjust_deg ),
             .eyeShiftMultiplier = std::clamp( float( vr_openxr_eye_shift_scale ), 0.0f, 4.0f ),
@@ -3867,6 +3868,7 @@ void RTFrameBuffer::RT_BeginFrame()
         if( !haveLastRequest ||
             lastRequest.presentationMode != presentationSettings.presentationMode ||
             lastRequest.mirrorMode != presentationSettings.mirrorMode ||
+            lastRequest.swapEyes != presentationSettings.swapEyes ||
             lastRequest.eyeRenderScale != presentationSettings.eyeRenderScale ||
             lastRequest.fovAdjustment != presentationSettings.fovAdjustment ||
             lastRequest.eyeShiftMultiplier != presentationSettings.eyeShiftMultiplier )

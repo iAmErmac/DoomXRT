@@ -2593,6 +2593,14 @@ OptionValue VRPresentationModes
 	1, "$VRPREFMNU_CINEMA_SCREEN"
 }
 
+OptionValue VRDesktopMirrorModes
+{
+	-1, "$OPTVAL_OFF"
+	0, "$OPTVAL_SBSFULL"
+	1, "$OPTVAL_LEFTEYE"
+	2, "$OPTVAL_RIGHTEYE"
+}
+
 OptionValue VRMode
 {
 	0, "$OPTVAL_NORMAL"
@@ -2705,7 +2713,6 @@ OptionMenu "VROptionsMenu" protected
 	StaticText " "
 
 	StaticText "$VRPREFMNU_PLANNED", 1
-	StaticText "$VRPREFMNU_PLANNED_MIRROR", 1
 	StaticText "$VRPREFMNU_PLANNED_MULTIVIEW", 1
 	StaticText "Locomotion", gold
 	Option "Off-hand Move Direction", vr_move_use_offhand, "OnOff"
@@ -2728,12 +2735,13 @@ OptionMenu "VRPresentationMenu" protected
 	Title "$VRPREFMNU_PRESENTATION"
 	Option "$VRPREFMNU_OPENXR_PRESENTATION", vr_rt_openxr_presentation, "VRPresentationModes"
 	Option "$VRPREFMNU_SWAP_EYES", vr_swap_eyes, "OnOff"
+	Option "$VRPREFMNU_DESKTOP_VIEW", vr_desktop_view, "VRDesktopMirrorModes"
 	Slider "$VRPREFMNU_OPENXR_RENDER_SCALE", vr_openxr_render_scale, 0.25, 2.0, 0.05, 2
 	Slider "$VRPREFMNU_OPENXR_FOV_ADJUST", vr_openxr_fov_adjust_deg, -90.0, 90.0, 1.0, 0
 	Slider "$VRPREFMNU_OPENXR_EYE_SHIFT", vr_openxr_eye_shift_scale, 0.0, 4.0, 0.05, 2
 	Slider "$VRPREFMNU_WORLD_SCALE", vr_hunits_per_meter, 1.0, 200.0, 1.0, 0
 	StaticText " "
-	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_rt_openxr_presentation vr_swap_eyes vr_openxr_render_scale vr_openxr_fov_adjust_deg vr_openxr_eye_shift_scale vr_hunits_per_meter"
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_rt_openxr_presentation vr_swap_eyes vr_desktop_view vr_openxr_render_scale vr_openxr_fov_adjust_deg vr_openxr_eye_shift_scale vr_hunits_per_meter"
 }
 
 OptionMenu "VRCinemaScreenMenu" protected
