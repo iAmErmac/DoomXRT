@@ -57,18 +57,23 @@ class Mauler : StrifeWeapon
 		{
 			return;
 		}
-
-		A_StartSound ("weapons/mauler1", CHAN_WEAPON);
-		Weapon weap = player.ReadyWeapon;
+		int hand = 0;
+		int laflags = 0;
+		int alflags = 0;
+		Weapon weap = invoker == player.OffhandWeapon ? player.OffhandWeapon : player.ReadyWeapon;
 		if (weap != null)
 		{
+			hand = weap.bOffhandWeapon ? 1 : 0;
+			laflags |= hand ? LAF_ISOFFHAND : 0;
+			alflags |= hand ? ALF_ISOFFHAND : 0;
 			if (!weap.DepleteAmmo (weap.bAltFire, true))
 				return;
 			
 		}
+		A_StartSound ("weapons/mauler1", CHAN_WEAPON);
 		player.mo.PlayAttacking2 ();
 
-		double pitch = BulletSlope ();
+		double pitch = BulletSlope (aimflags: alflags);
 			
 		for (int i = 0 ; i < 20 ; i++)
 		{
@@ -80,7 +85,7 @@ class Mauler : StrifeWeapon
 			// than this, so let's not handicap it by being too faithful to the
 			// original.
 
-			LineAttack (ang, PLAYERMISSILERANGE, pitch + Random2[Mauler1]() * (7.097 / 256), damage, 'Hitscan', "MaulerPuff");
+			LineAttack (ang, PLAYERMISSILERANGE, pitch + Random2[Mauler1]() * (7.097 / 256), damage, 'Hitscan', "MaulerPuff", laflags);
 		}
 	}
 }
@@ -132,8 +137,6 @@ class Mauler2 : Mauler
 
 	action void A_FireMauler2Pre ()
 	{
-		A_StartSound ("weapons/mauler2charge", CHAN_WEAPON);
-
 		if (player != null)
 		{
 			PSprite psp = player.GetPSprite(PSP_WEAPON);
@@ -143,6 +146,7 @@ class Mauler2 : Mauler
 				psp.y += Random2[Mauler2]() / 64.;
 			}
 		}
+		A_StartSound ("weapons/mauler2charge", CHAN_WEAPON);
 	}
 
 	//============================================================================
@@ -155,20 +159,22 @@ class Mauler2 : Mauler
 
 	action void A_FireMauler2 ()
 	{
+		int hand = 0;
 		if (player == null)
 		{
 			return;
 		}
 
-		Weapon weapon = player.ReadyWeapon;
+		Weapon weapon = invoker == player.OffhandWeapon ? player.OffhandWeapon : player.ReadyWeapon;
 		if (weapon != null)
 		{
+			hand = weapon.bOffhandWeapon ? 1 : 0;
 			if (!weapon.DepleteAmmo (weapon.bAltFire))
 				return;
 		}
 		player.mo.PlayAttacking2 ();
 		
-		SpawnPlayerMissile ("MaulerTorpedo");
+		SpawnPlayerMissile ("MaulerTorpedo", aimflags:hand ? ALF_ISOFFHAND : 0);
 		DamageMobj (self, null, 20, 'Disintegrate');
 		Thrust(7.8125, Angle+180.);
 	}

@@ -31,9 +31,7 @@ class Mace : HereticWeapon
 	Fire:
 		MACE B 4;
 	Hold:
-		MACE C 0 A_Light1;
 		MACE CDEF 3 A_FireMacePL1;
-		MACE C 0 A_Light0;
 		MACE C 4 A_ReFire;
 		MACE DEFB 4;
 		Goto Ready;
@@ -51,22 +49,44 @@ class Mace : HereticWeapon
 		{
 			return;
 		}
-
-		Weapon weapon = player.ReadyWeapon;
-		if (weapon != null)
+		int alflags = 0;
+		int hand = 0;
+		Weapon weapon = invoker == player.OffhandWeapon ? player.OffhandWeapon : player.ReadyWeapon;
+		if (weapon != null && weapon == invoker)
 		{
+			hand = weapon.bOffhandWeapon ? 1 : 0;
+			alflags |= hand ? ALF_ISOFFHAND : 0;
 			if (!weapon.DepleteAmmo (weapon.bAltFire))
 				return;
 		}
 
+		Vector3 spawnpos = Pos + (0, 0, 28 - Floorclip);
+		let directionAngle = angle;
+		let directionPitch = pitch;
+		if (player.mo.OverrideAttackPosDir)
+		{
+			if (hand == 1 && !multiplayer)
+			{
+				spawnpos = player.mo.OffhandPos;
+				directionAngle = player.mo.OffhandAngle + 90;
+				directionPitch = -player.mo.OffhandPitch;
+			}
+			else
+			{
+				spawnpos = player.mo.AttackPos;
+				directionAngle = player.mo.AttackAngle + 90;
+				directionPitch = -player.mo.AttackPitch;
+			}
+		}
+
 		if (random[MaceAtk]() < 28)
 		{
-			Actor ball = Spawn("MaceFX2", Pos + (0, 0, 28 - Floorclip), ALLOW_REPLACE);
+			Actor ball = Spawn("MaceFX2", spawnpos, ALLOW_REPLACE);
 			if (ball != null)
 			{
-				ball.Vel.Z = 2 - clamp(tan(pitch), -5, 5);
+				ball.Vel.Z = 2 - clamp(tan(directionPitch), -5, 5);
 				ball.target = self;
-				ball.angle = self.angle;
+				ball.angle = directionAngle;
 				ball.AddZ(ball.Vel.Z);
 				ball.VelFromAngle();
 				ball.Vel += Vel.xy / 2;
@@ -76,13 +96,13 @@ class Mace : HereticWeapon
 		}
 		else
 		{
-			let psp = player.GetPSprite(PSP_WEAPON);
+			let psp = player.GetPSprite(hand ? PSP_OFFHANDWEAPON : PSP_WEAPON);
 			if (psp)
 			{
 				psp.x = random[MaceAtk](-2, 1);
 				psp.y = WEAPONTOP + random[MaceAtk](0, 3);
 			}
-			Actor ball = SpawnPlayerMissile("MaceFX1", angle + (random[MaceAtk](-4, 3) * (360. / 256)));
+			Actor ball = SpawnPlayerMissile("MaceFX1", angle + (random[MaceAtk](-4, 3) * (360. / 256)), aimflags: alflags);
 			if (ball)
 			{
 				ball.special1 = 16; // tics till dropoff
@@ -107,10 +127,8 @@ class MacePowered : Mace
 	Fire:
 	Hold:	
 		MACE B 4;
-		MACE D 0 A_Light2;
 		MACE D 4 A_FireMacePL2;
 		MACE B 4;
-		MACE A 0 A_Light0;
 		MACE A 8 A_ReFire;
 		Goto Ready;
 	}
@@ -130,17 +148,35 @@ class MacePowered : Mace
 			return;
 		}
 
-		Weapon weapon = player.ReadyWeapon;
-		if (weapon != null)
+		int alflags = 0;
+		int hand = 0;
+		Weapon weapon = invoker == player.OffhandWeapon ? player.OffhandWeapon : player.ReadyWeapon;
+		if (weapon != null && weapon == invoker)
 		{
+			hand = weapon.bOffhandWeapon ? 1 : 0;
+			alflags |= weapon.bOffhandWeapon ? ALF_ISOFFHAND : 0;
 			if (!weapon.DepleteAmmo (weapon.bAltFire))
 				return;
 		}
-		Actor mo = SpawnPlayerMissile ("MaceFX4", angle, pLineTarget:t);
+
+		let directionPitch = pitch;
+		if (player.mo.OverrideAttackPosDir)
+		{
+			if (hand == 1 && !multiplayer)
+			{
+				directionPitch = -player.mo.OffhandPitch;
+			}
+			else
+			{
+				directionPitch = -player.mo.AttackPitch;
+			}
+		}
+
+		Actor mo = SpawnPlayerMissile ("MaceFX4", angle, pLineTarget:t, aimflags: alflags);
 		if (mo)
 		{
 			mo.Vel.xy += Vel.xy;
-			mo.Vel.Z = 2 - clamp(tan(pitch), -5, 5);
+			mo.Vel.Z = 2 - clamp(tan(directionPitch), -5, 5);
 			if (t.linetarget && !t.unlinked)
 			{
 				mo.tracer = t.linetarget;

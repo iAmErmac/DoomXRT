@@ -56,13 +56,19 @@ class Beak : Weapon
 		{
 			return;
 		}
-		let psp = player.GetPSprite(PSP_WEAPON);
+		let weapon = invoker == player.OffhandWeapon ? player.OffhandWeapon : player.ReadyWeapon;
+		if (weapon == null)
+		{
+			return;
+		}
+		let psplayer = weapon.bOffhandWeapon ? PSP_OFFHANDWEAPON : PSP_WEAPON;
+		let psp = player.GetPSprite(psplayer);
 		if (psp)
 		{
 			psp.y = WEAPONTOP;
 			ResetPSprite(psp);
 		}
-		player.SetPsprite(PSP_WEAPON, player.ReadyWeapon.GetReadyState());
+		player.SetPsprite(psplayer, weapon.GetReadyState());
 	}
 
 	//----------------------------------------------------------------------------
@@ -84,9 +90,10 @@ class Beak : Weapon
 		double ang = angle;
 		double slope = AimLineAttack (ang, DEFMELEERANGE);
 		LineAttack (ang, DEFMELEERANGE, slope, damage, 'Melee', "BeakPuff", true, t);
-		if (t.linetarget)
+		if ((!player.PlayInVR || (!multiplayer && vanilla_melee_attack)) && t.linetarget)
 		{
 			angle = t.angleFromSource;
+			player.resetDoomYaw = true;
 		}
 		A_StartSound ("chicken/peck", CHAN_VOICE);
 		player.chickenPeck = 12;

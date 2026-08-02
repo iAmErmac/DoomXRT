@@ -6125,16 +6125,20 @@ doplaysound:			if (funcIndex == ACSF_PlayActorSound)
 			break;
 
 		case ACSF_GetWeapon:
+        {
+            int hand = (argCount > 0) ? args[0] : 0;
+            AActor *weap = (activator && activator->player) ? (hand ? activator->player->OffhandWeapon : activator->player->ReadyWeapon) : nullptr;
             if (activator == NULL || activator->player == NULL || // Non-players do not have weapons
-                activator->player->ReadyWeapon == NULL)
+                weap == NULL)
             {
                 return GlobalACSStrings.AddString("None");
             }
             else
             {
-				return GlobalACSStrings.AddString(activator->player->ReadyWeapon->GetClass()->TypeName.GetChars());
+                return GlobalACSStrings.AddString(weap->GetClass()->TypeName.GetChars());
             }
 
+        }
 		case ACSF_SpawnDecal:
 			// int SpawnDecal(int tid, str decalname, int flags, fixed angle, int|fixed zoffset, int|fixed distance)
 			// Returns number of decals spawned (not including spreading)
@@ -9758,13 +9762,16 @@ scriptwait:
 
         case PCD_CHECKWEAPON:
             if (activator == NULL || activator->player == NULL || // Non-players do not have weapons
-                activator->player->ReadyWeapon == NULL)
+                (activator->player->ReadyWeapon == NULL && activator->player->OffhandWeapon == NULL))
             {
                 STACK(1) = 0;
             }
             else
             {
-				STACK(1) = activator->player->ReadyWeapon->GetClass()->TypeName == FName(Level->Behaviors.LookupString (STACK(1)), true);
+                auto weapname = FName(Level->Behaviors.LookupString (STACK(1)), true);
+                bool ismain = activator->player->ReadyWeapon && activator->player->ReadyWeapon->GetClass()->TypeName == weapname;
+                bool isoffhand = activator->player->OffhandWeapon && activator->player->OffhandWeapon->GetClass()->TypeName == weapname;
+                STACK(1) = ismain || isoffhand;
             }
             break;
 

@@ -69,19 +69,23 @@ extend class StateProvider
 		{
 			return;
 		}
+		int hand = 0;
+		int alflags = 0;
 
-		A_StartSound ("weapons/sshotf", CHAN_WEAPON);
-		Weapon weap = player.ReadyWeapon;
+		Weapon weap = invoker == player.OffhandWeapon ? player.OffhandWeapon : player.ReadyWeapon;
 		if (weap != null && invoker == weap && stateinfo != null && stateinfo.mStateType == STATE_Psprite)
 		{
+			hand = weap.bOffhandWeapon ? 1 : 0;
+			alflags |= weap.bOffhandWeapon ? ALF_ISOFFHAND : 0;
 			if (!weap.DepleteAmmo (weap.bAltFire, true))
 				return;
 			
-			player.SetPsprite(PSP_FLASH, weap.FindState('Flash'), true);
+			player.SetPsprite(PSP_FLASH, weap.FindState('Flash'), true, weap);
 		}
+		A_StartSound ("weapons/sshotf", CHAN_WEAPON);
 		player.mo.PlayAttacking2 ();
 
-		double pitch = BulletSlope ();
+		double pitch = BulletSlope (aimflags: alflags);
 			
 		for (int i = 0 ; i < 20 ; i++)
 		{
@@ -94,9 +98,7 @@ extend class StateProvider
 			// some simple trigonometry, that means the vertical angle of the shot
 			// can deviate by as many as ~7.097 degrees.
 
-// HAVE_RT begin: changed 'BulletPuff' to 'GibBulletPuff'
-			LineAttack (ang, PLAYERMISSILERANGE, pitch + Random2[FireSG2]() * (7.097 / 256), damage, 'Hitscan', "GibBulletPuff");
-// HAVE_RT end
+			LineAttack (ang, PLAYERMISSILERANGE, pitch + Random2[FireSG2]() * (7.097 / 256), damage, 'Hitscan', "BulletPuff", hand ? LAF_ISOFFHAND : 0);
 		}
 	}
 

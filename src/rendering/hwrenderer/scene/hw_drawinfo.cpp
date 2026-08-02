@@ -44,6 +44,7 @@
 #include "hw_lightbuffer.h"
 #include "hw_bonebuffer.h"
 #include "hw_vrmodes.h"
+#include "hwrenderer/data/hw_vrwheel.h"
 #include "hw_clipper.h"
 #include "v_draw.h"
 #include "a_corona.h"
@@ -51,6 +52,11 @@
 #include "actorinlines.h"
 #include "g_levellocals.h"
 
+void DrawHitscanTracers(FRenderState& state);
+void DrawLaserSightWorld(FRenderState& state);
+#if HAVE_RT
+void RT_DrawTeleportMarker(HWDrawInfo* di, FRenderState& state);
+#endif
 EXTERN_CVAR(Float, r_visibility)
 CVAR(Bool, gl_bandedswlight, false, CVAR_ARCHIVE)
 CVAR(Bool, gl_sort_textures, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
@@ -850,6 +856,15 @@ void HWDrawInfo::DrawScene(int drawmode)
 	if (drawmode == DM_MAINVIEW && RT_OpenXRInputGetMainWorldHandPose(&mainHand))
 	{
 		DrawPlayerSprites(IsHUDModelForPlayerAvailable(players[consoleplayer].camera->player), RenderState);
+	}
+	if (drawmode == DM_MAINVIEW)
+	{
+		DrawHitscanTracers(RenderState);
+        DrawLaserSightWorld(RenderState);
+#if HAVE_RT
+		RT_DrawTeleportMarker(this, RenderState);
+#endif
+		VRWheel_Draw(this, RenderState);
 	}
 
 	if (applySSAO && RenderState.GetPassType() == GBUFFER_PASS)

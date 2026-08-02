@@ -146,7 +146,20 @@ enum
 	WF_USER1OK			= 1 << 8,		// [MC] Allow pushing of custom state buttons 1-4
 	WF_USER2OK			= 1 << 9,
 	WF_USER3OK			= 1 << 10,
-	WF_USER4OK			= 1 << 11,
+	WF_USER4OK			= 1 << 11,		// [MC] Allow pushing of custom state buttons 1-4
+	WF_OFFHANDREADY          = 1 << 12,
+	WF_OFFHANDBOBBING        = 1 << 13,
+	WF_OFFHANDREADYALT       = 1 << 14,
+	WF_OFFHANDSWITCHOK       = 1 << 15,
+	WF_OFFHANDDISABLESWITCH  = 1 << 16,
+	WF_OFFHANDRELOADOK       = 1 << 17,
+	WF_OFFHANDZOOMOK         = 1 << 18,
+	WF_OFFHANDREFIRESWITCHOK = 1 << 19,
+	WF_OFFHANDUSER1OK        = 1 << 20,
+	WF_OFFHANDUSER2OK        = 1 << 21,
+	WF_OFFHANDUSER3OK        = 1 << 22,
+	WF_OFFHANDUSER4OK        = 1 << 23,
+	WF_TWOHANDSTABILIZED     = 1 << 24
 };
 
 // The VM cannot deal with this as an invalid pointer because it performs a read barrier on every object pointer read.
@@ -344,6 +357,8 @@ public:
 
 	bool		centering = false;
 	uint8_t		turnticks = 0;
+	bool		resetDoomYaw = false;
+	bool		ohattackdown = false;
 	bool		PlayInVR = false;
 
 
@@ -361,10 +376,11 @@ public:
 	int			lastkilltime = 0;			// [RH] For multikills
 	uint8_t		multicount = 0;
 	uint8_t		spreecount = 0;				// [RH] Keep track of killing sprees
-	uint16_t	WeaponState = 0;
+	uint32_t	WeaponState = 0;
 
 	AActor	   *ReadyWeapon = nullptr;
 	AActor	   *PendingWeapon = nullptr;			// WP_NOCHANGE if not changing
+	AActor     *OffhandWeapon = nullptr;
 	TObjPtr<DPSprite*> psprites = MakeObjPtr<DPSprite*>(nullptr); // view sprites (gun, etc)
 
 	int			cheats = 0;					// bit flags
@@ -390,6 +406,7 @@ public:
 	int			MorphStyle = 0;				// which effects to apply for this player instance when morphed
 	PClassActor *MorphExitFlash = nullptr;		// flash to apply when demorphing (cache of value given to MorphPlayer)
 	TObjPtr<AActor*>	PremorphWeapon = MakeObjPtr<AActor*>(nullptr);		// ready weapon before morphing
+	TObjPtr<AActor*>	PremorphWeaponOffhand = MakeObjPtr<AActor*>(nullptr);	// offhand weapon before morphing
 	int			chickenPeck = 0;			// chicken peck countdown
 	int			jumpTics = 0;				// delay the next jump for a moment
 	bool		onground = 0;				// Identifies if this player is on the ground or other object
@@ -471,7 +488,7 @@ public:
 	// Used ONLY for compatibility with the old hardcoded layers.
 	// Make sure that a state is properly set after calling this unless
 	// you are 100% sure the context already implies the layer exists.
-	DPSprite *GetPSprite(PSPLayers layer);
+	DPSprite *GetPSprite(PSPLayers layer, AActor *newcaller = nullptr);
 
 	// [Nash] set player FOV
 	void SetFOV(float fov);

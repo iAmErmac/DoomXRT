@@ -1646,6 +1646,19 @@ public:
 	bool isFrozen() const;
 
 	bool				hasmodel;
+	// For VR, override firing position and direction.
+	bool OverrideAttackPosDir;
+	DVector3 AttackPos;
+	DAngle AttackPitch;
+	DAngle AttackAngle;
+	DAngle AttackRoll;
+	DVector3 (*AttackDir)(AActor* actor, DAngle yaw, DAngle pitch);
+	DVector3 OffhandPos;
+	DAngle OffhandPitch;
+	DAngle OffhandAngle;
+	DAngle OffhandRoll;
+	DVector3 (*OffhandDir)(AActor* actor, DAngle yaw, DAngle pitch);
+
 
 };
 

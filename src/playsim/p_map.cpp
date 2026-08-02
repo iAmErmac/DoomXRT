@@ -80,6 +80,7 @@
 #include "p_trace.h"
 #include "p_checkposition.h"
 #include "p_linetracedata.h"
+#include "p_hitscantracer.h"
 #include "r_utility.h"
 #include "p_blockmap.h"
 #include "p_3dmidtex.h"
@@ -112,7 +113,7 @@ CVARD( Int, rt_blood_repl, RT_BLOOD_REPL_DEFAULT, CVAR_ARCHIVE, "0: disable gzdo
 #endif
 
 static void CheckForPushSpecial(line_t *line, int side, AActor *mobj, DVector2 * posforwindowcheck = NULL);
-static void SpawnShootDecal(AActor *t1, AActor *defaults, const FTraceResults &trace);
+static void SpawnShootDecal(AActor *t1, AActor *defaults, const FTraceResults &trace, int hand = 0);
 static void SpawnDeepSplash(AActor *t1, const FTraceResults &trace, AActor *puff);
 
 static FRandom pr_tracebleed("TraceBleed");
@@ -4558,6 +4559,15 @@ struct aim_t
 	}
 };
 
+EXTERN_CVAR(Bool, use_action_spawn_yzoffset)
+EXTERN_CVAR(Int, vr_control_scheme)
+
+static DVector3 CanonicalAimDir(DAngle yaw, DAngle pitch)
+{
+	const double pc = pitch.Cos();
+	return { pc * yaw.Cos(), pc * yaw.Sin(), -pitch.Sin() };
+}
+
 //============================================================================
 //
 // P_AimLineAttack
@@ -4579,7 +4589,7 @@ DAngle P_AimLineAttack(AActor *t1, DAngle angle, double distance, FTranslatedLin
 		else
 		{
 			// [BB] Disable autoaim on weapons with WIF_NOAUTOAIM.
-			auto weapon = t1->player->ReadyWeapon;
+			auto weapon = !!(flags & ALF_ISOFFHAND) ? t1->player->OffhandWeapon : t1->player->ReadyWeapon;
 			if ((weapon && (weapon->IntVar(NAME_WeaponFlags) & WIF_NOAUTOAIM)) && !(flags & ALF_NOWEAPONCHECK))
 			{
 				vrange = DAngle::fromDeg(0.5);
@@ -4595,19 +4605,33 @@ DAngle P_AimLineAttack(AActor *t1, DAngle angle, double distance, FTranslatedLin
 		}
 	}
 
+	DVector3 startPos = t1->Pos();
+	DAngle aimPitch = t1->Angles.Pitch;
+	DAngle aimAngle = angle;
+	if (t1->player != nullptr && t1->player->mo->OverrideAttackPosDir && !(flags & ALF_CHECKCONVERSATION))
+	{
+		const bool offhand = (flags & ALF_ISOFFHAND) != 0 && !multiplayer;
+		startPos = offhand ? t1->player->mo->OffhandPos : t1->player->mo->AttackPos;
+		const DAngle poseYaw = offhand ? t1->player->mo->OffhandAngle : t1->player->mo->AttackAngle;
+		const DAngle posePitch = offhand ? t1->player->mo->OffhandPitch : t1->player->mo->AttackPitch;
+		const DVector3 dir = CanonicalAimDir(poseYaw, posePitch);
+		 aimPitch = multiplayer ? -t1->player->mo->AttackPitch : dir.Pitch();
+		 aimAngle = multiplayer ? t1->player->mo->AttackAngle + DAngle::fromDeg(90.) : dir.Angle();
+	}
+
 	aim_t aim;
 
 	aim.flags = flags;
 	aim.shootthing = t1;
 	aim.friender = (friender == NULL) ? t1 : friender;
 	aim.aimdir = aim_t::aim_up | aim_t::aim_down;
-	aim.startpos = t1->Pos();
-	aim.aimtrace = angle.ToVector(distance);
+	aim.startpos = startPos;
+	aim.aimtrace = aimAngle.ToVector(distance);
 	aim.limitz = aim.shootz = shootz;
-	aim.toppitch = t1->Angles.Pitch - vrange;
-	aim.bottompitch = t1->Angles.Pitch + vrange;
+	aim.toppitch = aimPitch - vrange;
+	aim.bottompitch = aimPitch + vrange;
 	aim.attackrange = distance;
-	aim.aimpitch = t1->Angles.Pitch;
+	aim.aimpitch = aimPitch;
 	aim.lastsector = t1->Sector;
 	aim.startfrac = 0;
 	aim.unlinked = false;
@@ -4626,7 +4650,7 @@ DAngle P_AimLineAttack(AActor *t1, DAngle angle, double distance, FTranslatedLin
 	if (newPitch != nullAngle)
 		result->pitch = newPitch;
 
-	return result->linetarget ? result->pitch : t1->Angles.Pitch;
+	return result->linetarget && !(t1->player != nullptr && t1->player->mo->OverrideAttackPosDir) ? result->pitch : aimPitch;
 }
 
 //==========================================================================
@@ -4736,6 +4760,20 @@ AActor *P_LineAttack(AActor *t1, DAngle angle, double distance,
 		shootz = trackedOrigin.Z;
 	}
 
+	DVector3 poseOrigin;
+	bool hasPoseOrigin = false;
+	if (t1->player != nullptr && t1->player->mo->OverrideAttackPosDir && !(flags & ALF_CHECKCONVERSATION))
+	{
+		const bool offhand = (flags & LAF_ISOFFHAND) != 0 && !multiplayer;
+		poseOrigin = offhand ? t1->player->mo->OffhandPos : t1->player->mo->AttackPos;
+		const DAngle poseYaw = offhand ? t1->player->mo->OffhandAngle : t1->player->mo->AttackAngle;
+		const DAngle posePitch = offhand ? t1->player->mo->OffhandPitch : t1->player->mo->AttackPitch;
+		direction = CanonicalAimDir(poseYaw, posePitch);
+		angle = direction.Angle();
+		 pitch = direction.Pitch();
+		shootz = poseOrigin.Z;
+		hasPoseOrigin = true;
+	}
 	if (t1->player != NULL)
 	{
 		// this is coming from a weapon attack function which needs to transfer information to the obituary code,
@@ -4743,7 +4781,7 @@ AActor *P_LineAttack(AActor *t1, DAngle angle, double distance,
 		pflag = DMG_PLAYERATTACK;
 		if (damage > 0 && t1->player == t1->Level->GetConsolePlayer())
 		{
-			RT_OpenXRHapticWeaponFire();
+			if ((flags & LAF_ISOFFHAND) != 0) RT_OpenXRHapticWeaponFireHand(vr_control_scheme < 10 ? 0 : 1); else { RT_OpenXRHapticWeaponFire(); if (weaponStabilised) RT_OpenXRHapticWeaponFireHand(vr_control_scheme < 10 ? 1 : 0); }
 		}
 	}
 
@@ -4755,10 +4793,15 @@ AActor *P_LineAttack(AActor *t1, DAngle angle, double distance,
 
 	// We need to check the defaults of the replacement here
 	AActor *puffDefaults = GetDefaultByType(pufftype->GetReplacement(t1->Level));
+	AActor *weapon = nullptr;
+	if (t1->player != nullptr)
+	{
+		weapon = (flags & LAF_ISOFFHAND) ? t1->player->OffhandWeapon : t1->player->ReadyWeapon;
+	}
 	
 	TData.hitGhosts = (t1->player != NULL &&
-		t1->player->ReadyWeapon != NULL &&
-		(t1->player->ReadyWeapon->flags2 & MF2_THRUGHOST)) ||
+		weapon != NULL &&
+		(weapon->flags2 & MF2_THRUGHOST)) ||
 		(puffDefaults && (puffDefaults->flags2 & MF2_THRUGHOST));
 	
 	spawnSky = (puffDefaults && (puffDefaults->flags3 & MF3_SKYEXPLODE));
@@ -4901,26 +4944,27 @@ AActor *P_LineAttack(AActor *t1, DAngle angle, double distance,
 			// [RH] Spawn a decal
 			if (trace.HitType == TRACE_HitWall && trace.Line->special != Line_Horizon && !trace.Line->isVisualPortal() && !(flags & LAF_NOIMPACTDECAL) && !(puffDefaults->flags7 & MF7_NODECAL))
 			{
+				int hand = flags & LAF_ISOFFHAND;
 				// [TN] If the actor or weapon has a decal defined, use that one.
 				if (t1->DecalGenerator != NULL ||
-					(t1->player != NULL && t1->player->ReadyWeapon != NULL && t1->player->ReadyWeapon->DecalGenerator != NULL))
+					(t1->player != NULL && weapon != NULL && weapon->DecalGenerator != NULL))
 				{
 					// [ZK] If puff has FORCEDECAL set, do not use the weapon's decal
 					if (puffDefaults->flags7 & MF7_FORCEDECAL && puff != NULL && puff->DecalGenerator)
-						SpawnShootDecal(puff,  puff, trace);
+						SpawnShootDecal(puff,  puff, trace, hand);
 					else
-						SpawnShootDecal(t1, t1, trace);
+						SpawnShootDecal(t1, t1, trace, hand);
 				}
 
 				// Else, look if the bulletpuff has a decal defined.
 				else if (puff != NULL && puff->DecalGenerator)
 				{
-					SpawnShootDecal(puff, puff, trace);
+					SpawnShootDecal(puff, puff, trace, hand);
 				}
 
 				else
 				{
-					SpawnShootDecal(t1, t1, trace);
+					SpawnShootDecal(t1, t1, trace, hand);
 				}
 			}
 			else if (puff != NULL &&
@@ -5029,6 +5073,9 @@ AActor *P_LineAttack(AActor *t1, DAngle angle, double distance,
 		}
 	}
 
+	if (trace.HitType == TRACE_HitWall || trace.HitType == TRACE_HitFloor || trace.HitType == TRACE_HitCeiling)
+		P_QueueHitscanRicochet(t1, tempos, trace.HitPos, flags);
+
 	t1->Level->localEventManager->WorldHitscanFired(t1, tempos, puffpos, puff, flags);
 
 	if (killPuff && puff != NULL)
@@ -5104,7 +5151,21 @@ int P_LineTrace(AActor *t1, DAngle angle, double distance,
 	DVector3 startpos;
 	double startz = t1->Z() - t1->Floorclip;
 	startz += sz;
-	if ( flags & TRF_ABSPOSITION )
+	DVector3 fromPos = t1->PosAtZ(startz);
+	DVector3 yoffsetDir = direction;
+	DVector3 zoffsetDir = direction;
+	if ((flags & TRF_USEWEAPON) && t1->player != nullptr && !multiplayer && t1->player->mo->OverrideAttackPosDir)
+	{
+		const bool offhand = (flags & TRF_ISOFFHAND) != 0;
+		fromPos = offhand ? t1->player->mo->OffhandPos : t1->player->mo->AttackPos;
+		const DAngle poseYaw = offhand ? t1->player->mo->OffhandAngle : t1->player->mo->AttackAngle;
+		const DAngle posePitch = offhand ? t1->player->mo->OffhandPitch : t1->player->mo->AttackPitch;
+		direction = CanonicalAimDir(poseYaw, posePitch);
+		yoffsetDir = CanonicalAimDir(poseYaw - DAngle::fromDeg(90.), posePitch);
+		zoffsetDir = CanonicalAimDir(poseYaw, posePitch + DAngle::fromDeg(90.));
+	}
+
+		if ( flags & TRF_ABSPOSITION )
 	{
 		startpos = DVector3(offsetforward, offsetside, sz);
 	}
@@ -5114,7 +5175,11 @@ int P_LineTrace(AActor *t1, DAngle angle, double distance,
 	}
 	else if ( (offsetforward == 0.0) && (offsetside == 0.0) )
 	{
-		startpos = t1->PosAtZ(startz);
+		startpos = fromPos;
+	}
+	else if ((flags & TRF_USEWEAPON) && t1->player != nullptr && !multiplayer && t1->player->mo->OverrideAttackPosDir)
+	{
+		startpos = fromPos + offsetforward * direction + offsetside * yoffsetDir + sz * zoffsetDir;
 	}
 	else
 	{
@@ -5542,7 +5607,7 @@ void P_RailAttack(FRailParams *p)
 	}
 	if (p->damage > 0 && source->player == source->Level->GetConsolePlayer())
 	{
-		RT_OpenXRHapticWeaponFire();
+		if ((p->flags & RAF_ISOFFHAND) != 0) RT_OpenXRHapticWeaponFireHand(vr_control_scheme < 10 ? 0 : 1); else { RT_OpenXRHapticWeaponFire(); if (weaponStabilised) RT_OpenXRHapticWeaponFireHand(vr_control_scheme < 10 ? 1 : 0); }
 	}
 
 	DVector3 start;
@@ -5565,18 +5630,32 @@ void P_RailAttack(FRailParams *p)
 		puffflags |= PF_NORANDOMZ;
 	}
 
-	DVector2 xy = source->Vec2Angle(p->offset_xy, angle - DAngle::fromDeg(90.));
+	DVector3 direction = vec;
+
+	if (source->player != nullptr && source->player->mo->OverrideAttackPosDir)
+	{
+		const bool offhand = (p->flags & RAF_ISOFFHAND) != 0 && !multiplayer;
+		start = offhand ? source->player->mo->OffhandPos : source->player->mo->AttackPos;
+		const DAngle poseYaw = offhand ? source->player->mo->OffhandAngle : source->player->mo->AttackAngle;
+		const DAngle posePitch = offhand ? source->player->mo->OffhandPitch : source->player->mo->AttackPitch;
+		direction = CanonicalAimDir(poseYaw, posePitch);
+		vec = direction;
+		if (!use_action_spawn_yzoffset && !multiplayer) { p->offset_xy = p->offset_z = 0; }
+		const DVector3 side = CanonicalAimDir(poseYaw - DAngle::fromDeg(90.), posePitch);
+		const DVector3 up = CanonicalAimDir(poseYaw, posePitch + DAngle::fromDeg(90.));
+		start += p->offset_xy * side + p->offset_z * up;
+	}
+	else
+	{
+		const DVector2 xy = source->Vec2Angle(p->offset_xy, angle - DAngle::fromDeg(90.));
+		start = DVector3(xy.X, xy.Y, shootz);
+	}
 
 	RailData rail_data;
 	rail_data.Caller = source;
 	rail_data.limit = p->limit;
 	rail_data.count = 0;
-	rail_data.StopAtOne = !!(p->flags & RAF_NOPIERCE);
-	start.X = xy.X;
-	start.Y = xy.Y;
-	start.Z = shootz;
-
-	rail_data.StopAtInvul = (puffDefaults->flags3 & MF3_FOILINVUL) ? false : true;
+	rail_data.StopAtOne = !!(p->flags & RAF_NOPIERCE);rail_data.StopAtInvul = (puffDefaults->flags3 & MF3_FOILINVUL) ? false : true;
 	rail_data.MThruSpecies = ((puffDefaults->flags6 & MF6_MTHRUSPECIES)) ? true : false;
 	
 	// Prevent mod breakage as somewhere, someone is relying on these to spawn on an actor 
@@ -5608,7 +5687,7 @@ void P_RailAttack(FRailParams *p)
 			rail_data.UseThruBits = !!(thepuff->flags8 & MF8_ALLOWTHRUBITS);
 	}
 
-	Trace(start, source->Sector, vec, p->distance, MF_SHOOTABLE, ML_BLOCKEVERYTHING, source, trace,	flags, ProcessRailHit, &rail_data);
+	Trace(start, source->Sector, direction, p->distance, MF_SHOOTABLE, ML_BLOCKEVERYTHING, source, trace,	flags, ProcessRailHit, &rail_data);
 
 	// Hurt anything the trace hit
 	unsigned int i;
@@ -5700,6 +5779,8 @@ void P_RailAttack(FRailParams *p)
 			}
 		}
 	}
+
+	P_QueueHitscanRicochet(source, start, trace.HitPos, flags);
 
 	source->Level->localEventManager->WorldRailgunFired(source, start, trace.HitPos, thepuff, flags);
 
@@ -6029,7 +6110,25 @@ void P_UseLines(player_t *player)
 	// old code:
 	// This added test makes the "oof" sound work on 2s lines -- killough:
 
-	if (!P_UseTraverse(player->mo, start, end, foundline))
+	bool used = P_UseTraverse(player->mo, start, end, foundline);
+	if (!used && player->mo->OverrideAttackPosDir && !multiplayer)
+	{
+		start = player->mo->AttackPos.XY();
+		const DAngle aimAngle = player->mo->AttackAngle + DAngle::fromDeg(90.);
+		const double useRange = player->ReadyWeapon != nullptr ? player->ReadyWeapon->FloatVar(NAME_UseRange) : 48;
+		end = start + aimAngle.ToVector(useRange);
+		used = P_UseTraverse(player->mo, start, end, foundline);
+	}
+	if (!used && player->mo->OverrideAttackPosDir && !multiplayer)
+	{
+		start = player->mo->OffhandPos.XY();
+		const DAngle aimAngle = player->mo->OffhandAngle + DAngle::fromDeg(90.);
+		const double useRange = player->OffhandWeapon != nullptr ? player->OffhandWeapon->FloatVar(NAME_UseRange) : 48;
+		end = start + aimAngle.ToVector(useRange);
+		used = P_UseTraverse(player->mo, start, end, foundline);
+	}
+
+	if (!used)
 	{ // [RH] Give sector a chance to eat the use
 		sector_t *sec = player->mo->Sector;
 		int spac = SECSPAC_Use;
@@ -7272,15 +7371,19 @@ bool P_ChangeSector(sector_t *sector, int crunch, double amt, int floorOrCeil, b
 //
 //==========================================================================
 
-void SpawnShootDecal(AActor *t1, AActor *defaults, const FTraceResults &trace)
+void SpawnShootDecal(AActor *t1, AActor *defaults, const FTraceResults &trace, int hand)
 {
 	FDecalBase *decalbase = nullptr;
 
-	if (defaults->player != nullptr && defaults->player->ReadyWeapon != nullptr)
+	if (defaults->player != nullptr)
 	{
-		decalbase = defaults->player->ReadyWeapon->DecalGenerator;
+		AActor *weapon = hand ? defaults->player->OffhandWeapon : defaults->player->ReadyWeapon;
+		if (weapon != nullptr)
+		{
+			decalbase = weapon->DecalGenerator;
+		}
 	}
-	else
+	if (decalbase == nullptr)
 	{
 		decalbase = defaults->DecalGenerator;
 	}

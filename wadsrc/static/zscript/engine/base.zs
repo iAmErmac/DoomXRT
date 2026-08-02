@@ -11,6 +11,7 @@ enum ESoundFlags
 	CHAN_5 = 5,
 	CHAN_6 = 6,
 	CHAN_7 = 7,
+	CHAN_OFFWEAPON = 5, // channel for the offhand weapon
 	
 	// modifier flags
 	CHAN_LISTENERZ = 8,
@@ -196,6 +197,7 @@ struct _ native unsafe(internal)	// These are the global variables, the struct i
 	native readonly bool multiplayer;
 	native @KeyBindings Bindings;
 	native @KeyBindings AutomapBindings;
+	native @KeyBindings DoubleBindings;
 	native readonly @GameInfoStruct gameinfo;
 	native readonly ui bool netgame;
 	native readonly uint gameaction;

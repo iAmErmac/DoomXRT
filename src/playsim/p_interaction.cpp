@@ -655,6 +655,15 @@ void AActor::Die (AActor *source, AActor *inflictor, int dmgflags, FName MeansOf
 			VMCall(func, &param, 1, nullptr, 0);
 		}
 
+        // drop offhand weapon
+        {
+            IFVM(PlayerPawn, DropWeapon)
+            {
+                VMValue param[] = { player->mo, 1 };
+                VMCall(func, param, 2, nullptr, 0);
+            }
+        }
+
 		if (Level->isCamera(this) && automapactive)
 		{
 			// don't die in auto map, switch view prior to dying

@@ -357,6 +357,7 @@ OptionMenu "OptionsMenu" protected
 {
 	Title "$OPTMNU_TITLE"
 	Submenu "$VRPREFMNU_TITLE",			"VROptionsMenu"
+	Submenu "Mod Options",			"ModOptionsMenu"
 	StaticText " "
 	Submenu "$OPTMNU_CONTROLS",			"CustomizeControls"
 	Submenu "$OPTMNU_MOUSE",			"MouseOptions"
@@ -508,15 +509,33 @@ ListMenu "PlayerMenu"
 
 OptionValue "Layouts"
 {
-	0, "$OPTVAL_MODERN"
-	1, "$OPTVAL_CLASSICZ"
-	2, "$OPTVAL_MODERNLEFT"
+	0, "$OPTVAL_CLASSICZ"
+	1, "$OPTVAL_MODERN"
+	2, "$OPTVAL_MODERN2"
+	3, "$OPTVAL_MODERN3"
+	4, "$OPTVAL_MODERN"
+	5, "$OPTVAL_CLASSICZ"
+	6, "$OPTVAL_MODERNLEFT"
 }
 
 OptionMenu "CustomizeControls" protected
 {
 	Title "$CNTRLMNU_TITLE"
 
+	Option "$CNTRLMNU_SHOWDBLBINDINGS" , "menu_showdoublebindings", "YesNo"
+	IfOption(DoubleBindingMenu)
+	{
+		StaticText "$CNTRLMNU_DOUBLEBINDINGS", gold
+		Submenu "$CNTRLMNU_ACTION" , "ActionDoubleControlsMenu"
+		Submenu "$CNTRLMNU_WEAPONS" , "WeaponsDoubleControlMenu"
+		Submenu "$CNTRLMNU_INVENTORY" , "InventoryDoubleControlsMenu"
+		Submenu "$CNTRLMNU_OTHER" , "OtherDoubleControlsMenu"
+		Submenu "$CNTRLMNU_POPUPS" , "PopupDoubleControlsMenu"
+		Submenu "$MNU_MULTIPLAYER" , "ChatDoubleControlsMenu"
+	}
+	else
+	{
+		StaticText "$CNTRLMNU_SINGLEBINDINGS", gold
 	Submenu    "$CNTRLMNU_ACTION"      , "ActionControlsMenu"
 	Submenu    "$CNTRLMNU_WEAPONS"     , "WeaponsControlMenu"
 	Submenu    "$CNTRLMNU_INVENTORY"   , "InventoryControlsMenu"
@@ -524,9 +543,15 @@ OptionMenu "CustomizeControls" protected
 	Submenu    "$CNTRLMNU_OTHER"       , "OtherControlsMenu"
 	Submenu    "$CNTRLMNU_POPUPS"      , "StrifeControlsMenu"
 	Submenu    "$MNU_MULTIPLAYER"        , "ChatControlsMenu"
+	}
+
 	StaticText ""
 	Option "$CNTRLMNU_LAYOUT",			"cl_defaultconfiguration", "Layouts"
 	SafeCommand "$OPTMNU_DEFAULTS",		"resetb2defaults"
+	SafeCommand "$OPTMNU_UPDATEMISSING", "binddefaults"
+	StaticText " "
+	Option "$CNTRLMNU_CUSTOMBINDS", "cl_custombinds", "OnOff"
+	Option "$CNTRLMNU_BINDSOVERRIDE", "cl_custombinds_override", "OnOff", "cl_custombinds"
 }
 
 OptionMenu "ActionControlsMenu" protected
@@ -538,9 +563,15 @@ OptionMenu "ActionControlsMenu" protected
 	StaticText ""
 	Control    "$CNTRLMNU_ATTACK"           , "+attack"
 	Control    "$CNTRLMNU_ALTATTACK"        , "+altattack"
+	Control    "$CNTRLMNU_OH_ATTACK"        , "+oh_attack"
+	Control    "$CNTRLMNU_OH_ALTATTACK"     , "+oh_altatk"
 	Control    "$CNTRLMNU_RELOAD"           , "+reload"
 	Control    "$CNTRLMNU_ZOOM"             , "+zoom"
 
+
+	StaticText "$CNTRLMNU_ADVANCED_RELOADING", gold
+	Control    "$CNTRLMNU_MAINHANDRELOAD" , "+mh_reload"
+	Control    "$CNTRLMNU_OFFHANDRELOAD"  , "+oh_reload"
 	StaticText ""
 	Control    "$CNTRLMNU_USE"              , "+use"
 
@@ -602,7 +633,12 @@ OptionMenu "WeaponsControlMenu" protected
 	StaticText ""
 	Control    "$CNTRLMNU_NEXTWEAPON"     , "weapnext"
 	Control    "$CNTRLMNU_PREVIOUSWEAPON" , "weapprev"
-
+	Control    "Main Weapon Wheel"        , "+vrweaponwheel"
+	Control    "$CNTRLMNU_OFFHAND_NEXTWEAPON"     , "weapnext 1"
+	Control    "$CNTRLMNU_OFFHAND_PREVIOUSWEAPON" , "weapprev 1"
+	Control    "$CNTRLMNU_SWITCH_TO_OFFHAND" , "switchhand 1"
+	Control    "$CNTRLMNU_SWITCH_TO_MAINHAND" , "switchhand 0"
+	Control    "Offhand Weapon Wheel"     , "+vroffhandweaponwheel"
 	StaticText ""
 	Control    "$CNTRLMNU_SLOT1"          , "slot 1"
 	Control    "$CNTRLMNU_SLOT2"          , "slot 2"
@@ -635,13 +671,14 @@ OptionMenu "InventoryControlsMenu" protected
 	StaticText ""
 	Control    "$CNTRLMNU_NEXTITEM"     , "invnext"
 	Control    "$CNTRLMNU_PREVIOUSITEM" , "invprev"
-
+	Control    "Inventory Wheel"          , "+vrinvwheel"
 	StaticText ""
 	Control    "$CNTRLMNU_DROPITEM"     , "invdrop"
 	Control    "$CNTRLMNU_QUERYITEM"    , "invquery"
 
 	StaticText ""
 	Control    "$CNTRLMNU_DROPWEAPON"   , "weapdrop"
+	Control    "$CNTRLMNU_DROPOFFHANDWEAPON" , "weapdrop 1"
 }
 
 OptionMenu "OtherControlsMenu" protected
@@ -2724,6 +2761,152 @@ OptionValue ControlScheme
 	11, "Left-handed B"
 }
 
+
+OptionValue "HitscanTracerMode"
+{
+    0, "Off"
+    1, "Player Weapons"
+    2, "All Weapons"
+}
+
+OptionValue "LaserBeamLength"
+{
+	0, "Full"
+	1, "Half"
+	2, "Fixed"
+}
+
+OptionMenu "VRLaserSightOptions" protected
+{
+	Title "Laser Sight Options"
+
+	StaticText ""
+	StaticText "Laser Options", gold
+	Option "Enabled",				"vr_laser_sight", "OnOff"
+	Option "Multiplayer Pointer",		"vr_laser_other_players_pointer", "YesNo"
+	Option "Show On Melee",				"vr_laser_show_melee", "YesNo"
+	Option "Hide On Wheel",			"vr_laser_hide_on_wheel", "YesNo"
+	ColorPicker "Color",			"vr_laser_color"
+	Slider "Pointer Scale",			"vr_laser_pointer_scale", 0.1, 1.0, 0.05, 2
+	Slider "Pointer Alpha",			"vr_laser_pointer_alpha", 0.0, 1.0, 0.05, 2
+	Slider "Pointer Glow Scale",	"vr_laser_pointer_glow_scale", 1.1, 4.0, 0.05, 2
+	Slider "Pointer Glow Intensity", "vr_laser_pointer_glow_intensity", 0.1, 4.0, 0.05, 2
+
+	StaticText ""
+	StaticText "Beam Options", gold
+	Option "Beam Enabled",			"vr_laser_beam", "OnOff"
+	Option "Multiplayer Beam",			"vr_laser_other_players_beam", "YesNo"
+	Slider "Beam Alpha",			"vr_laser_beam_alpha", 0.0, 1.0, 0.05, 2
+	Slider "Beam Width",			"vr_laser_beam_width", 0.1, 2.0, 0.05, 2
+	Option "Beam Length",			"vr_laser_beam_length", "LaserBeamLength"
+	Slider "Fixed Length",			"vr_laser_fixed_length", 60, 1000, 10, 0
+	Slider "Source Offset X",		"vr_laser_source_offset_x", -64, 64, 1, 0
+	Slider "Source Offset Y",		"vr_laser_source_offset_y", -64, 64, 1, 0
+	Slider "Source Offset Z",		"vr_laser_source_offset_z", -64, 64, 1, 0
+	StaticText " "
+
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_laser_sight vr_laser_show_melee vr_laser_hide_on_wheel vr_laser_beam vr_laser_other_players_beam vr_laser_other_players_pointer vr_laser_color vr_laser_beam_alpha vr_laser_beam_width vr_laser_pointer_scale vr_laser_pointer_alpha vr_laser_pointer_glow_scale vr_laser_pointer_glow_intensity vr_laser_beam_length vr_laser_fixed_length vr_laser_source_offset_x vr_laser_source_offset_y vr_laser_source_offset_z"
+}
+
+OptionValue "WheelListOption"
+{
+	0, "Owned Weapons"
+	1, "All Weapons"
+}
+
+OptionValue "WheelIconModelOption"
+{
+	0, "Off"
+	1, "When Available"
+}
+
+OptionValue "WheelItemSelectOption"
+{
+	0, "Controller Touch"
+	1, "Controller Aim"
+}
+
+OptionMenu "VRWeaponWheelOptions" protected
+{
+	Title "Weapon/Item Wheel Options"
+
+	StaticText ""
+	StaticText "Open Wheel", gold
+	Control    "$CNTRLMNU_WHEEL_MAINWEAPONS"    , "+vrweaponwheel"
+	Control    "$CNTRLMNU_WHEEL_OFFHAND_WEAPONS" , "+vroffhandweaponwheel"
+	Control    "$CNTRLMNU_WHEEL_ITEMS" 		, "+vrinvwheel"
+
+	StaticText ""
+	StaticText "Wheel Appearance", gold
+	ColorPicker "Icon Background Color", 	"vr_wheel_icon_bg_color"
+	ColorPicker "Icon Highlight Color",   	"vr_wheel_icon_select_color"
+	Slider "Wheel Icon Scale", 				"vr_wheel_icon_scale", 0.1, 5.0, 0.1, 1
+	Slider "Wheel Radius", 					"vr_wheel_radius", 3, 30, 1, 0
+	Slider "Distance From Hand", 			"vr_wheel_distance", -0.5, 1.0, 0.05, 2
+	Slider "Move X Offset", 				"vr_wheel_xoffset", -0.3, 0.3, 0.01, 2
+	Slider "Move Y Offset", 				"vr_wheel_yoffset", -0.3, 0.3, 0.01, 2
+	Slider "Wheel Time Slow",				"vr_wheel_time_slow", 0.0, 1.0, 0.1, 1
+	StaticText "Setting this to 0 will freeze time when the wheel is open", "Brown"
+	StaticText " "
+
+	StaticText ""
+	StaticText "Wheel Selection", gold
+	Option "Show Weapons/Items", 			"vr_wheel_weapon_all", "WheelListOption"
+	Option "Hide Other Class Weapons", 			"vr_wheel_hide_other_class_weapons", "YesNo"
+	Option "Item Wheel Hand Switch", 			"vr_wheel_switch_hands", "YesNo"
+	StaticText "Lets you switch hands for the item wheel only", "Brown"
+	Option "Auto Split List", 				"vr_wheel_auto_split", "YesNo"
+	StaticText "Auto split list into two wheels if there are too many items", "Brown"
+	Option "Selection Mode", 				"vr_wheel_selection_type", "WheelItemSelectOption"
+	Slider "Aim Select Angle", 				"vr_wheel_select_angle", 10.0, 90.0, 0.5, 1, vr_wheel_selection_type
+	Slider "Aim Select Deadzone", 			"vr_wheel_deadzone", 0.1, 5.0, 0.1, 1, vr_wheel_selection_type
+
+	StaticText ""
+	StaticText "Other Options", gold
+	Option "Wheel Sounds", 					"vr_wheel_sound", "OnOff"
+	Option "Hide Weapon In Hand", 			"vr_wheel_hide_hand_weapon", "YesNo"
+	Option "Load Models For Icons", 			"vr_wheel_icon_load_model", "WheelIconModelOption"
+	Slider "Model Icon Scale", 		"vr_wheel_icon_model_scale", 0.1, 10.0, 0.1, 1, vr_wheel_icon_load_model
+	Slider "Model Icon Angle", 				"vr_wheel_icon_model_yaw", -180.0, 180.0, 1.0, 0, vr_wheel_icon_load_model
+	Slider "Model Icon X Offset", 			"vr_wheel_icon_model_xoffset", -100.0, 100.0, 1.0, 0, vr_wheel_icon_load_model
+	Slider "Model Icon Z Offset", 			"vr_wheel_icon_model_zoffset", -100.0, 100.0, 1.0, 0, vr_wheel_icon_load_model
+	StaticText ""
+
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_wheel_icon_bg_color vr_wheel_icon_select_color vr_wheel_icon_scale vr_wheel_radius vr_wheel_distance vr_wheel_xoffset vr_wheel_yoffset vr_wheel_time_slow vr_wheel_weapon_all vr_wheel_hide_other_class_weapons vr_wheel_switch_hands vr_wheel_auto_split vr_wheel_selection_type vr_wheel_select_angle vr_wheel_deadzone vr_wheel_sound vr_wheel_hide_hand_weapon vr_wheel_icon_load_model vr_wheel_icon_model_scale vr_wheel_icon_model_yaw vr_wheel_icon_model_xoffset vr_wheel_icon_model_zoffset"
+}
+
+OptionMenu "VRHitscanTracerOptions" protected
+{
+	Title "Bullet Tracer Options"
+
+	StaticText ""
+	StaticText "Tracer Options", gold
+	Option "Enabled",			"vr_hitscan_tracer", "HitscanTracerMode"
+	ColorPicker "Color",		"vr_hitscan_tracer_color"
+	Slider "Opacity",			"vr_hitscan_tracer_alpha", 0.0, 1.0, 0.05, 2
+	Slider "Length",			"vr_hitscan_tracer_length", 1.0, 64.0, 1.0, 0
+	Slider "Width",			"vr_hitscan_tracer_width", 0.01, 2.0, 0.01, 2
+	Slider "Speed",			"vr_hitscan_tracer_speed", 0.0, 40.0, 0.1, 1
+	Slider "Offset",			"vr_hitscan_tracer_offset", 0.0, 64.0, 1.0, 0
+	StaticText ""
+	StaticText "Ricochet Options", gold
+	Option "Enable Ricochet",	"vr_hitscan_ricochet", "YesNo"
+	Slider "Ricochet Chance",	"vr_hitscan_ricochet_chance", 0.0, 100.0, 1.0, 0
+	StaticText ""
+
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_hitscan_tracer vr_hitscan_ricochet vr_hitscan_ricochet_chance vr_hitscan_tracer_color vr_hitscan_tracer_alpha vr_hitscan_tracer_length vr_hitscan_tracer_width vr_hitscan_tracer_speed vr_hitscan_tracer_offset"
+}
+
+
+OptionMenu "ModOptionsMenu" protected
+{
+    Title "Mod Options"
+    StaticText ""
+    Submenu "Laser Sight Options", "VRLaserSightOptions"
+    Submenu "Bullet Tracer Options", "VRHitscanTracerOptions"
+    Submenu "Weapon/Item Wheel Options", "VRWeaponWheelOptions"
+}
+
 OptionMenu "VROptionsMenu" protected
 {
 	Title "$VRPREFMNU_TITLE"
@@ -2740,14 +2923,15 @@ OptionMenu "VROptionsMenu" protected
 	Option "Off-hand Move Direction", vr_move_use_offhand, "OnOff"
 	Option "Control Scheme", vr_control_scheme, "ControlScheme"
 	Option "Control Mode", vr_joy_mode, "ControlMode"
+	Option "Switch Thumbsticks", vr_switch_sticks, "OnOff"
 	Option "Secondary Button Mappings", vr_secondary_button_mappings, "OnOff"
 	Option "Two-Handed Weapons", vr_two_handed_weapons, "OnOff"
-	Option "Enable Haptics", vr_enable_haptics, "OnOff"
 	Option "Menu Pointer", vr_menu_pointer, "OnOff"
 	Option "Virtual Mouse In Menu", vr_mouse_in_menu, "OnOff"
 	ColorPicker "Menu Pointer Colour", vr_menu_pointer_color
 	Option "Use Teleport", vr_teleport, "OnOff"
 	Option "Slidey Movement / Momentum", vr_momentum, "OnOff"
+	Option "Natural Crouch", vr_crouch_use_button, "OnOff"
 	ScaleSlider "Walk Speed", vr_move_speed, 0, 50, 1, "Multiplier Active"
 	Slider "Walk Multiplier", vr_walk_multiplier, 0.5, 2.0, 0.01, 2, use_walk_multiplier
 	Slider "Run Multiplier", vr_run_multiplier, 0.5, 2.0, 0.01, 2
@@ -2756,7 +2940,18 @@ OptionMenu "VROptionsMenu" protected
 	Slider "Snap Turn Angle", vr_snapTurn, 0.0, 90.0, 1.0, 2
 	StaticText "0-10 enables smooth turning; higher values set snap angle.", brown
 	StaticText " "
-	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_control_scheme vr_joy_mode vr_secondary_button_mappings vr_two_handed_weapons vr_enable_haptics vr_menu_pointer vr_menu_pointer_color vr_mouse_in_menu vr_move_use_offhand vr_teleport vr_momentum vr_move_speed vr_walk_multiplier vr_run_multiplier vr_snapTurn"
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_control_scheme vr_switch_sticks vr_joy_mode vr_secondary_button_mappings vr_two_handed_weapons vr_menu_pointer vr_menu_pointer_color vr_mouse_in_menu vr_move_use_offhand vr_teleport vr_momentum vr_crouch_use_button vr_move_speed vr_walk_multiplier vr_run_multiplier vr_snapTurn"
+	StaticText ""
+	StaticText "Haptics", gold
+	Option "Enable Haptics", vr_enable_haptics, "OnOff"
+	Command "Test Haptics", "vr_haptic_test"
+	Slider "Pickup Haptic Level", vr_pickup_haptic_level, 0.0, 1.0, 0.1, 2
+	Slider "Quake Haptic Level", vr_quake_haptic_level, 0.0, 1.0, 0.1, 2
+	Slider "Missile Haptic Level", vr_missile_haptic_level, 0.0, 1.0, 0.1, 2
+	Slider "External Haptics Intensity", ext_haptic_level_global_intensity, 0.0, 2.0, 0.1, 2
+	StaticText " "
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_enable_haptics vr_pickup_haptic_level vr_quake_haptic_level vr_missile_haptic_level ext_haptic_level_global_intensity"
+
 	StaticText "$VRPREFMNU_PLANNED_SAMPLING", 1
 }
 
@@ -2766,14 +2961,10 @@ OptionMenu "VRWeaponOptions" protected
 	StaticText ""
 	StaticText "Global Options", gold
 	Option "Enable Recoil", vr_recoil, "OnOff"
-	Option "Enable Haptics", vr_enable_haptics, "OnOff"
-	Command "Test Haptics", "vr_haptic_test"
-	Slider "Pickup Haptic Level", vr_pickup_haptic_level, 0.0, 1.0, 0.1, 2
-	Slider "Quake Haptic Level", vr_quake_haptic_level, 0.0, 1.0, 0.1, 2
 	Slider "Pitch Adjust", vr_weaponRotate, -45, 45, 5, 2
 	Slider "Weapon Scale", vr_weaponScale, 0.1, 3.0, 0.1, 2
 	StaticText " "
-	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_recoil vr_enable_haptics vr_pickup_haptic_level vr_quake_haptic_level vr_weaponRotate vr_weaponScale"
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_recoil vr_weaponRotate vr_weaponScale"
 	StaticText " "
 	StaticText "3D Model Options", gold
 	Slider "X Offset", vr_3dweaponOffsetX, -10, 10, 0.1, 2
@@ -2803,8 +2994,10 @@ OptionMenu "VRPresentationMenu" protected
 	Slider "$VRPREFMNU_OPENXR_FOV_ADJUST", vr_openxr_fov_adjust_deg, -90.0, 90.0, 1.0, 0
 	Slider "$VRPREFMNU_OPENXR_EYE_SHIFT", vr_openxr_eye_shift_scale, 0.0, 4.0, 0.05, 2
 	Slider "$VRPREFMNU_WORLD_SCALE", vr_hunits_per_meter, 1.0, 200.0, 1.0, 0
+	Slider "Vertical World Scale", vr_vunits_per_meter, 1.0, 60.0, 1.0, 0
+	Slider "Height Adjust", vr_height_adjust, -0.5, 1.0, 0.01, 2
 	StaticText " "
-	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_rt_openxr_presentation vr_swap_eyes vr_desktop_view vr_openxr_render_scale vr_openxr_fov_adjust_deg vr_openxr_eye_shift_scale vr_hunits_per_meter"
+	SafeCommand "$OPTMNU_DEFAULTS", "resetcvar vr_rt_openxr_presentation vr_swap_eyes vr_desktop_view vr_openxr_render_scale vr_openxr_fov_adjust_deg vr_openxr_eye_shift_scale vr_hunits_per_meter vr_vunits_per_meter vr_height_adjust"
 }
 
 OptionMenu "VRCinemaScreenMenu" protected
@@ -3008,4 +3201,225 @@ OptionValue "SpriteShadowModes"
 	0, "$OPTVAL_OFF"
 	1, "$OPTVAL_DEFAULT"
 	2, "$OPTVAL_SPRSHADALWAYS"
+}
+
+
+
+
+
+OptionMenu "ActionDoubleControlsMenu" protected
+{
+	Title "$CNTRLMNU_ACTION_TITLE"
+	ScrollTop 2
+	StaticTextSwitchable "$CNTRLMNU_SWITCHTEXT1", "$CNTRLMNU_SWITCHTEXT2", "ControlMessage"
+
+	ifOption(Developer1, Developer2)
+	{
+		StaticText "$DEVOPTMNU_TITLE", gold
+		DoubleControl    "$DEVOPTMNU_TOGGLE_FPS_COUNTER"   , "togglefps"
+		DoubleControl    "$DEVOPTMNU_RUN_BENCHMARK"        , "bench"
+		StaticText ""
+	}
+
+	StaticText ""
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L1", brown
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L2", brown
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_ATTACK"           , "+attack"
+	DoubleControl    "$CNTRLMNU_ALTATTACK"        , "+altattack"
+	DoubleControl    "$CNTRLMNU_OH_ATTACK"        , "+oh_attack"
+	DoubleControl    "$CNTRLMNU_OH_ALTATTACK"     , "+oh_altatk"
+	DoubleControl    "$CNTRLMNU_RELOAD"           , "+reload"
+	DoubleControl    "$CNTRLMNU_ZOOM"             , "+zoom"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_USE"              , "+use"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_FORWARD"          , "+forward"
+	DoubleControl    "$CNTRLMNU_BACK"             , "+back"
+	DoubleControl    "$CNTRLMNU_MOVELEFT"         , "+moveleft"
+	DoubleControl    "$CNTRLMNU_MOVERIGHT"        , "+moveright"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_TURNLEFT"         , "+left"
+	DoubleControl    "$CNTRLMNU_TURNRIGHT"        , "+right"
+	DoubleControl    "$CNTRLMNU_TURN180"          , "turn180"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_JUMP"             , "+jump"
+	DoubleControl    "$CNTRLMNU_CROUCH"           , "+crouch"
+	DoubleControl    "$CNTRLMNU_TOGGLECROUCH"     , "crouch"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_MOVEUP"           , "+moveup"
+	DoubleControl    "$CNTRLMNU_MOVEDOWN"         , "+movedown"
+	DoubleControl    "$CNTRLMNU_LAND"             , "land"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_MOUSELOOK"        , "+mlook"
+	DoubleControl    "$CNTRLMNU_KEYBOARDLOOK"     , "+klook"
+	DoubleControl    "$CNTRLMNU_LOOKUP"           , "+lookup"
+	DoubleControl    "$CNTRLMNU_LOOKDOWN"         , "+lookdown"
+	DoubleControl    "$CNTRLMNU_CENTERVIEW"       , "centerview"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_RUN"              , "+speed"
+	DoubleControl    "$CNTRLMNU_TOGGLERUN"        , "toggle cl_run"
+	DoubleControl    "$CNTRLMNU_STRAFE"           , "+strafe"
+
+	StaticText ""
+	StaticText "$CNTRLMNU_ADVANCED_RELOADING", gold
+	DoubleControl    "$CNTRLMNU_MAINHANDRELOAD"    , "+mh_reload"
+	DoubleControl    "$CNTRLMNU_OFFHANDRELOAD"     , "+oh_reload"
+}
+
+
+OptionMenu "ChatDoubleControlsMenu" protected
+{
+	Title "$MNU_MULTIPLAYER"
+	ScrollTop 2
+	StaticTextSwitchable "$CNTRLMNU_SWITCHTEXT1", "$CNTRLMNU_SWITCHTEXT2", "ControlMessage"
+
+	StaticText ""
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L1", brown
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L2", brown
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_SCOREBOARD"       , "+showscores"
+	DoubleControl    "$CNTRLMNU_TOGGLESCOREBOARD" , "togglescoreboard"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_SAY"     , "messagemode"
+	DoubleControl    "$CNTRLMNU_TEAMSAY" , "messagemode2"
+}
+
+
+OptionMenu "WeaponsDoubleControlMenu" protected
+{
+	Title "$CNTRLMNU_WEAPONS_TITLE"
+	ScrollTop 2
+	StaticTextSwitchable "$CNTRLMNU_SWITCHTEXT1", "$CNTRLMNU_SWITCHTEXT2", "ControlMessage"
+
+	StaticText ""
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L1", brown
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L2", brown
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_NEXTWEAPON"     , "weapnext"
+	DoubleControl    "$CNTRLMNU_PREVIOUSWEAPON" , "weapprev"
+	DoubleControl    "$CNTRLMNU_OFFHAND_NEXTWEAPON"     , "weapnext 1"
+	DoubleControl    "$CNTRLMNU_OFFHAND_PREVIOUSWEAPON" , "weapprev 1"
+	DoubleControl    "$CNTRLMNU_SWITCH_TO_OFFHAND", "switchhand 1"
+	DoubleControl    "$CNTRLMNU_SWITCH_TO_MAINHAND", "switchhand 0"
+	DoubleControl    "$CNTRLMNU_WHEEL_MAINWEAPONS" , "+vrweaponwheel"
+	DoubleControl    "$CNTRLMNU_WHEEL_OFFHAND_WEAPONS" , "+vroffhandweaponwheel"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_SLOT1"          , "slot 1"
+	DoubleControl    "$CNTRLMNU_SLOT2"          , "slot 2"
+	DoubleControl    "$CNTRLMNU_SLOT3"          , "slot 3"
+	DoubleControl    "$CNTRLMNU_SLOT4"          , "slot 4"
+	DoubleControl    "$CNTRLMNU_SLOT5"          , "slot 5"
+	DoubleControl    "$CNTRLMNU_SLOT6"          , "slot 6"
+	DoubleControl    "$CNTRLMNU_SLOT7"          , "slot 7"
+	DoubleControl    "$CNTRLMNU_SLOT8"          , "slot 8"
+	DoubleControl    "$CNTRLMNU_SLOT9"          , "slot 9"
+	DoubleControl    "$CNTRLMNU_SLOT0"          , "slot 0"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_USER1"            , "+user1"
+	DoubleControl    "$CNTRLMNU_USER2"            , "+user2"
+	DoubleControl    "$CNTRLMNU_USER3"            , "+user3"
+	DoubleControl    "$CNTRLMNU_USER4"            , "+user4"
+}
+
+
+OptionMenu "InventoryDoubleControlsMenu" protected
+{
+	Title "$CNTRLMNU_INVENTORY_TITLE"
+	ScrollTop 2
+	StaticTextSwitchable "$CNTRLMNU_SWITCHTEXT1", "$CNTRLMNU_SWITCHTEXT2", "ControlMessage"
+
+	StaticText ""
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L1", brown
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L2", brown
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_USEITEM"      , "invuse"
+	DoubleControl    "$CNTRLMNU_USEALLITEMS"  , "invuseall"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_NEXTITEM"     , "invnext"
+	DoubleControl    "$CNTRLMNU_PREVIOUSITEM" , "invprev"
+	DoubleControl    "$CNTRLMNU_WHEEL_ITEMS" 	, "+vrinvwheel"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_DROPITEM"     , "invdrop"
+	DoubleControl    "$CNTRLMNU_QUERYITEM"    , "invquery"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_DROPWEAPON"   , "weapdrop"
+
+	IfGame(Hexen)
+	{
+		StaticText ""
+		DoubleControl    "$CNTRLMNU_USEFLECHETTE", "useflechette"
+	}
+}
+
+
+OptionMenu "OtherDoubleControlsMenu" protected
+{
+	Title "$CNTRLMNU_OTHER_TITLE"
+	ScrollTop 2
+	StaticTextSwitchable "$CNTRLMNU_SWITCHTEXT1", "$CNTRLMNU_SWITCHTEXT2", "ControlMessage"
+
+	StaticText ""
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L1", brown
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L2", brown
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_AUTOMAP"         , "togglemap"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_CHASECAM"        , "chase"
+	DoubleControl    "$CNTRLMNU_COOPSPY"         , "spynext"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_SCREENSHOT"      , "screenshot"
+	DoubleControl    "$CNTRLMNU_CONSOLE"         , "toggleconsole"
+	DoubleControl    "$CNTRLMNU_PAUSE"           , "pause"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_DISPLAY_INC"     , "sizeup"
+	DoubleControl    "$CNTRLMNU_DISPLAY_DEC"     , "sizedown"
+	DoubleControl    "$CNTRLMNU_TOGGLE_MESSAGES" , "togglemessages"
+	DoubleControl    "$CNTRLMNU_ADJUST_GAMMA"    , "bumpgamma"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_OPEN_MAIN"       , "menu_main"
+	DoubleControl    "$CNTRLMNU_OPEN_HELP"       , "menu_help"
+	DoubleControl    "$CNTRLMNU_OPEN_SAVE"       , "menu_save"
+	DoubleControl    "$CNTRLMNU_OPEN_LOAD"       , "menu_load"
+	DoubleControl    "$CNTRLMNU_OPEN_OPTIONS"    , "menu_options"
+	DoubleControl    "$CNTRLMNU_OPEN_DISPLAY"    , "menu_display"
+	DoubleControl    "$CNTRLMNU_EXIT_TO_MAIN"    , "menu_endgame"
+	DoubleControl    "$CNTRLMNU_MENU_QUIT"       , "menu_quit"
+
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_QUICKSAVE"       , "quicksave"
+	DoubleControl    "$CNTRLMNU_QUICKLOAD"       , "quickload"
+}
+
+
+OptionMenu "PopupDoubleControlsMenu" protected
+{
+	Title "$CNTRLMNU_POPUPS_TITLE"
+	ScrollTop 2
+	StaticTextSwitchable "$CNTRLMNU_SWITCHTEXT1", "$CNTRLMNU_SWITCHTEXT2", "ControlMessage"
+
+	StaticText ""
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L1", brown
+	StaticText "$CNTRLMNU_DBLBINDTEXT_L2", brown
+	StaticText ""
+	DoubleControl    "$CNTRLMNU_MISSION" , "showpop 1"
+	DoubleControl    "$CNTRLMNU_KEYS"    , "showpop 2"
+	DoubleControl    "$CNTRLMNU_STATS"   , "showpop 3"
 }

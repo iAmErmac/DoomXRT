@@ -62,18 +62,20 @@ extend class StateProvider
 			return;
 		}
 
-		A_StartSound ("weapons/shotgf", CHAN_WEAPON);
-		Weapon weap = player.ReadyWeapon;
+		int alflags = 0;
+		Weapon weap = invoker == player.OffhandWeapon ? player.OffhandWeapon : player.ReadyWeapon;
 		if (weap != null && invoker == weap && stateinfo != null && stateinfo.mStateType == STATE_Psprite)
 		{
+			alflags |= weap.bOffhandWeapon ? ALF_ISOFFHAND : 0;
 			if (!weap.DepleteAmmo (weap.bAltFire, true))
 				return;
 			
-			player.SetPsprite(PSP_FLASH, weap.FindState('Flash'), true);
+			player.SetPsprite(PSP_FLASH, weap.FindState('Flash'), true, weap);
 		}
 		player.mo.PlayAttacking2 ();
+		A_StartSound ("weapons/shotgf", CHAN_WEAPON);
 
-		double pitch = BulletSlope ();
+		double pitch = BulletSlope (aimflags: alflags);
 
 		for (int i = 0; i < 7; i++)
 		{

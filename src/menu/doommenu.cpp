@@ -1389,11 +1389,23 @@ bool OkForLocalization(FTextureID texnum, const char* substitute)
 	return TexMan.OkForLocalization(texnum, substitute, cl_gfxlocalization);
 }
 
+
+CUSTOM_CVAR(Bool, menu_showdoublebindings, false, CVAR_NOINITCALL)
+{
+ DeinitMenus();
+
+ M_Init();
+ M_CreateGameMenus();
+ M_StartControlPanel (true);
+ M_SetMenu(NAME_CustomizeControls, -1);
+}
+
 bool  CheckSkipGameOptionBlock(const char *str)
 {
 	bool filter = false;
 	if (!stricmp(str, "ReadThis")) filter |= gameinfo.drawreadthis;
 	else if (!stricmp(str, "Swapmenu")) filter |= gameinfo.swapmenu;
+	else if (!stricmp(str, "DoubleBindingMenu")) filter |= menu_showdoublebindings;
 	return filter;
 }
 

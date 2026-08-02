@@ -664,7 +664,7 @@ bool M_Responder (event_t *ev)
 				// do we want mouse input?
 				if (ev->subtype >= EV_GUI_FirstMouseEvent && ev->subtype <= EV_GUI_LastMouseEvent)
 				{
-					if (!m_use_mouse && !menu_allow_mouse_override)
+					if (!m_use_mouse && !menu_allow_mouse_override && !(ev->data3 & GUI_MOUSE_VIRTUAL))
 					{
 						LastMousePos.HeldButtons.Clear();
 						LastMousePos.LastUpdate = -1;

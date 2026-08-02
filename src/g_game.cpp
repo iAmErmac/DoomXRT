@@ -51,7 +51,9 @@
 #include "c_bind.h"
 #include "c_dispatch.h"
 #include "filesystem.h"
-#include "p_local.h" 
+#include "p_local.h"
+#include "p_trace.h"
+#include "p_linetracedata.h"
 #include "gstrings.h"
 #include "r_sky.h"
 #include "g_game.h"
@@ -92,12 +94,19 @@
 #include "i_interface.h"
 #include "fs_findfile.h"
 #include "hwrenderer/data/hw_vrmodes.h"
+#include "common/rendering/hwrenderer/data/hw_vrwheel.h"
 
 
 static FRandom pr_dmspawn ("DMSpawn");
 static FRandom pr_pspawn ("PlayerSpawn");
 
 float RT_OpenXRInputConsumeViewYawDeltaDegrees();
+void RT_OpenXRInputConsumeRoomScaleDelta(float* worldX, float* worldY);
+float RT_OpenXRInputConsumeHeadHeightDelta();
+void RT_OpenXRResetRoomScaleTracking();
+bool RT_OpenXRInputGetTeleportState(bool* aiming);
+void RT_OpenXRInputSetTeleportTarget(bool valid, float x, float y, float z);
+bool RT_OpenXRInputGetStickMove(float* forward, float* side);
 extern int startpos, laststartpos;
 
 bool WriteZip(const char* filename, const FileSys::FCompressedBuffer* content, size_t contentcount);
@@ -200,6 +209,10 @@ short			consistancy[MAXPLAYERS][BACKUPTICS];
 EXTERN_CVAR (Int, vr_move_speed)
 EXTERN_CVAR (Float, vr_walk_multiplier)
 EXTERN_CVAR (Float, vr_run_multiplier)
+EXTERN_CVAR (Bool, vr_crouch_use_button)
+EXTERN_CVAR (Bool, vr_teleport)
+EXTERN_CVAR (Float, vr_vunits_per_meter)
+EXTERN_CVAR (Float, vr_height_adjust)
 EXTERN_CVAR (Int, turnspeedwalkfast)
 EXTERN_CVAR (Int, turnspeedsprintfast)
 EXTERN_CVAR (Int, turnspeedwalkslow)
@@ -321,11 +334,28 @@ CCMD (turnspeeds)
 	}
 }
 
+CCMD (switchhand)
+{
+	if (argv.argc() > 1)
+	{
+		int hand = atoi(argv[1]);
+		auto mo = players[consoleplayer].mo;
+		if (mo)
+		{
+			IFVIRTUALPTRNAME(mo, NAME_PlayerPawn, SwitchWeaponHand)
+			{
+				VMValue param[] = { mo, hand };
+				VMCall(func, param, 2, nullptr, 0);
+			}
+		}
+	}
+}
 CCMD (slot)
 {
 	if (argv.argc() > 1)
 	{
 		int slot = atoi (argv[1]);
+		int hand = argv.argc() > 2 ? atoi(argv[2]) : 0;
 
 		auto mo = players[consoleplayer].mo;
 		if (slot < NUM_WEAPON_SLOTS && mo)
@@ -333,16 +363,16 @@ CCMD (slot)
 			// Needs to be redone
 			IFVIRTUALPTRNAME(mo, NAME_PlayerPawn, PickWeapon)
 			{
-				VMValue param[] = { mo, slot, !(dmflags2 & DF2_DONTCHECKAMMO) };
+				VMValue param[] = { mo, slot, !(dmflags2 & DF2_DONTCHECKAMMO), hand };
 				VMReturn ret((void**)&SendItemUse);
-				VMCall(func, param, 3, &ret, 1);
+				VMCall(func, param, 4, &ret, 1);
 			}
 		}
 
 		// [Nash] Option to display the name of the weapon being switched to.
 		if ((paused || pauseext) || players[consoleplayer].playerstate != PST_LIVE)
 			return;
-		if (SendItemUse != players[consoleplayer].ReadyWeapon && (displaynametags & 2) && StatusBar && SmallFont && SendItemUse)
+		if (SendItemUse != (hand ? players[consoleplayer].OffhandWeapon : players[consoleplayer].ReadyWeapon) && (displaynametags & 2) && StatusBar && SmallFont && SendItemUse)
 		{
 			StatusBar->AttachMessage(Create<DHUDMessageFadeOut>(nullptr, SendItemUse->GetTag(),
 				1.5f, 0.90f, 0, 0, (EColorRange)*nametagcolor, 2.f, 0.35f), MAKE_ID('W', 'E', 'P', 'N'));
@@ -372,6 +402,61 @@ CCMD (pause)
 	sendpause = true;
 }
 
+
+static int Cmd_VRWeaponWheelDown(CCmdFuncPtr)
+{
+	VRWheel_OpenWeapon();
+	return CCMD_OK;
+}
+
+static int Cmd_VRWeaponWheelUp(CCmdFuncPtr)
+{
+	VRWheel_CloseWeapon();
+	return CCMD_OK;
+}
+
+static int Cmd_VROffhandWeaponWheelDown(CCmdFuncPtr)
+{
+	VRWheel_OpenOffhandWeapon();
+	return CCMD_OK;
+}
+
+static int Cmd_VROffhandWeaponWheelUp(CCmdFuncPtr)
+{
+	VRWheel_CloseOffhandWeapon();
+	return CCMD_OK;
+}
+
+static int Cmd_VRInventoryWheelDown(CCmdFuncPtr)
+{
+	VRWheel_OpenInventory();
+	return CCMD_OK;
+}
+
+static int Cmd_VRInventoryWheelUp(CCmdFuncPtr)
+{
+	VRWheel_CloseInventory();
+	return CCMD_OK;
+}
+
+namespace
+{
+	struct FVRWheelCommandRegistration
+	{
+		FVRWheelCommandRegistration()
+		{
+			C_RegisterFunction("+vrweaponwheel", "Opens the VR main-hand weapon wheel while held.", Cmd_VRWeaponWheelDown);
+			C_RegisterFunction("-vrweaponwheel", "Closes the VR main-hand weapon wheel.", Cmd_VRWeaponWheelUp);
+			C_RegisterFunction("+vroffhandweaponwheel", "Opens the VR offhand weapon wheel while held.", Cmd_VROffhandWeaponWheelDown);
+			C_RegisterFunction("-vroffhandweaponwheel", "Closes the VR offhand weapon wheel.", Cmd_VROffhandWeaponWheelUp);
+			C_RegisterFunction("+vrinvwheel", "Opens the VR inventory wheel while held.", Cmd_VRInventoryWheelDown);
+			C_RegisterFunction("-vrinvwheel", "Closes the VR inventory wheel.", Cmd_VRInventoryWheelUp);
+		}
+	};
+
+	static FVRWheelCommandRegistration VRWheelCommandRegistration;
+}
+
 CCMD (turn180)
 {
 	sendturn180 = true;
@@ -379,15 +464,17 @@ CCMD (turn180)
 
 CCMD (weapnext)
 {
+	int hand = argv.argc() > 1 ? atoi(argv[1]) : 0;
+	if (VRWheel_IsActive()) return;
 	auto mo = players[consoleplayer].mo;
 	if (mo)
 	{
 		// Needs to be redone
 		IFVIRTUALPTRNAME(mo, NAME_PlayerPawn, PickNextWeapon)
 		{
-			VMValue param[] = { mo };
+			VMValue param[] = { mo, hand };
 			VMReturn ret((void**)&SendItemUse);
-			VMCall(func, param, 1, &ret, 1);
+			VMCall(func, param, 2, &ret, 1);
 		}
 	}
 
@@ -398,7 +485,7 @@ CCMD (weapnext)
 		StatusBar->AttachMessage(Create<DHUDMessageFadeOut>(nullptr, SendItemUse->GetTag(),
 			1.5f, 0.90f, 0, 0, (EColorRange)*nametagcolor, 2.f, 0.35f), MAKE_ID( 'W', 'E', 'P', 'N' ));
 	}
-	if (SendItemUse != players[consoleplayer].ReadyWeapon)
+	if (SendItemUse != (hand ? players[consoleplayer].OffhandWeapon : players[consoleplayer].ReadyWeapon))
 	{
 		S_Sound(CHAN_AUTO, 0, "misc/weaponchange", 1.0, ATTN_NONE);
 	}
@@ -406,15 +493,17 @@ CCMD (weapnext)
 
 CCMD (weapprev)
 {
+	int hand = argv.argc() > 1 ? atoi(argv[1]) : 0;
+	if (VRWheel_IsActive()) return;
 	auto mo = players[consoleplayer].mo;
 	if (mo)
 	{
 		// Needs to be redone
 		IFVIRTUALPTRNAME(mo, NAME_PlayerPawn, PickPrevWeapon)
 		{
-			VMValue param[] = { mo };
+			VMValue param[] = { mo, hand };
 			VMReturn ret((void**)&SendItemUse);
-			VMCall(func, param, 1, &ret, 1);
+			VMCall(func, param, 2, &ret, 1);
 		}
 	}
 
@@ -425,7 +514,7 @@ CCMD (weapprev)
 		StatusBar->AttachMessage(Create<DHUDMessageFadeOut>(nullptr, SendItemUse->GetTag(),
 			1.5f, 0.90f, 0, 0, (EColorRange)*nametagcolor, 2.f, 0.35f), MAKE_ID( 'W', 'E', 'P', 'N' ));
 	}
-	if (SendItemUse != players[consoleplayer].ReadyWeapon)
+	if (SendItemUse != (hand ? players[consoleplayer].OffhandWeapon : players[consoleplayer].ReadyWeapon))
 	{
 		S_Sound(CHAN_AUTO, 0, "misc/weaponchange", 1.0, ATTN_NONE);
 	}
@@ -449,6 +538,7 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, DisplayNameTag, DisplayNameTag)
 
 CCMD (invnext)
 {
+	if (VRWheel_IsActive()) return;
 	if (players[consoleplayer].mo != nullptr)
 	{
 		IFVM(PlayerPawn, InvNext)
@@ -461,6 +551,7 @@ CCMD (invnext)
 
 CCMD(invprev)
 {
+	if (VRWheel_IsActive()) return;
 	if (players[consoleplayer].mo != nullptr)
 	{
 		IFVM(PlayerPawn, InvPrev)
@@ -473,11 +564,13 @@ CCMD(invprev)
 
 CCMD (invuseall)
 {
+	if (VRWheel_IsActive()) return;
 	SendItemUse = (const AActor *)1;
 }
 
 CCMD (invuse)
 {
+	if (VRWheel_IsActive()) return;
 	if (players[consoleplayer].inventorytics == 0)
 	{
 		if (players[consoleplayer].mo) SendItemUse = players[consoleplayer].mo->PointerVar<AActor>(NAME_InvSel);
@@ -498,6 +591,7 @@ constexpr char True[] = "true";
 
 CCMD (use)
 {
+	if (VRWheel_IsActive()) return;
 	if (argv.argc() > 1 && players[consoleplayer].mo != NULL)
 	{
 		bool subclass = false;
@@ -519,7 +613,8 @@ CCMD (invdrop)
 
 CCMD (weapdrop)
 {
-	SendItemDrop = players[consoleplayer].ReadyWeapon;
+	int hand = argv.argc() > 1 ? atoi(argv[1]) : 0;
+	SendItemDrop = hand ? players[consoleplayer].OffhandWeapon : players[consoleplayer].ReadyWeapon;
 	SendItemDropAmount = -1;
 }
 
@@ -552,6 +647,7 @@ CCMD (useflechette)
 
 CCMD (select)
 {
+    if (VRWheel_IsActive()) return;
 	if (!players[consoleplayer].mo) return;
 	auto user = players[consoleplayer].mo;
 	if (argv.argc() > 1)
@@ -581,6 +677,22 @@ static inline int joyint(double val)
 	}
 }
 
+static inline int joyint_deadzone(double val)
+{
+	// VR avoids one-unit ticcmd movement from tiny analog noise.
+	if (std::fabs(val) < 0.5)
+	{
+		return 0;
+	}
+	return joyint(val);
+}
+
+static void VR_ApplyStickMove(int forwardScale, int sideScale, float joyforward, float joyside, int& forward, int& side)
+{
+	side += joyint_deadzone(joyside * sideScale);
+	forward += joyint_deadzone(joyforward * forwardScale);
+}
+
 FBaseCVar* G_GetUserCVar(int playernum, const char* cvarname)
 {
 	if ((unsigned)playernum >= MAXPLAYERS || !playeringame[playernum])
@@ -597,6 +709,8 @@ FBaseCVar* G_GetUserCVar(int playernum, const char* cvarname)
 }
 
 static ticcmd_t emptycmd;
+static DVector3 vrTeleportLocation;
+static int vrTeleportTarget = TRACE_HitNone;
 
 ticcmd_t* G_BaseTiccmd()
 {
@@ -623,6 +737,38 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	const VRMode* vrmode = VRMode::GetVRMode();
 	players[consoleplayer].PlayInVR = !multiplayer && vrmode != nullptr && vrmode->IsVR();
 
+	if (vrmode != nullptr && vrmode->IsVR() && !multiplayer && players[consoleplayer].mo != nullptr)
+	{
+        static bool previousNaturalCrouch = vr_crouch_use_button;
+        const bool naturalCrouch = vr_crouch_use_button;
+        if (previousNaturalCrouch && !naturalCrouch)
+        {
+            // Leaving tracked crouch must restore ordinary crouch input before
+            // a positional HMD sample can reach roomscale locomotion.
+            players[consoleplayer].Uncrouch();
+            RT_OpenXRResetRoomScaleTracking();
+        }
+        previousNaturalCrouch = naturalCrouch;
+		if (vr_crouch_use_button)
+		{
+			const float headHeightDelta = RT_OpenXRInputConsumeHeadHeightDelta();
+			const double defaultViewHeight = players[consoleplayer].DefaultViewHeight();
+			if (defaultViewHeight > 0.0)
+			{
+				// Apply the adjusted tracked height directly; clamping it to the
+                // standing view height prevents physical crouching entirely.
+                const double hmdHeight = defaultViewHeight + headHeightDelta;
+				players[consoleplayer].crouching = 10;
+				players[consoleplayer].crouchfactor = hmdHeight / defaultViewHeight;
+			}
+		}
+		else if (players[consoleplayer].crouching == 10)
+		{
+			players[consoleplayer].Uncrouch();
+		}
+	}
+
+
 	if (vrmode != nullptr && vrmode->IsVR())
 	{
 		const double scale = turbo * 0.01;
@@ -647,7 +793,79 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	strafe = buttonMap.ButtonDown(Button_Strafe);
 	speed = buttonMap.ButtonDown(Button_Speed) ^ (int)cl_run;
 
-	if (vrmode != nullptr && vrmode->IsVR())
+	bool teleportAiming = false;
+	const bool teleportActivate = RT_OpenXRInputGetTeleportState(&teleportAiming);
+	if (vrmode != nullptr && vrmode->IsVR() && !multiplayer && players[consoleplayer].mo != nullptr &&
+		players[consoleplayer].mo->health > 0 && vr_teleport)
+	{
+		if (teleportAiming)
+		{
+			VSMatrix transform;
+			if (RT_OpenXRGetWeaponTransform(&transform, VR_OFFHAND))
+			{
+				const FLOATTYPE* matrix = transform.get();
+				DVector3 origin(matrix[12], matrix[13], matrix[14]);
+				const DVector3 direction(-matrix[8], -matrix[9], -matrix[10]);
+                origin.Z += double(vr_height_adjust) * double(vr_vunits_per_meter);
+				const double horizontal = std::sqrt(direction.X * direction.X + direction.Y * direction.Y);
+				const DAngle yaw = DAngle::fromRad(std::atan2(direction.Y, direction.X));
+				const DAngle pitch = DAngle::fromRad(std::atan2(-direction.Z, horizontal));
+				FLineTraceData trace;
+				// VR traces from the off-hand pose through the absolute-offset path.
+				// The OpenXR transform is already in game coordinates, so derive the
+				// same actor-relative X/Y offsets instead of reinterpreting the pose.
+				AActor* mo = players[consoleplayer].mo;
+				if (P_LineTrace(mo, yaw, 8192.0, pitch,
+					TRF_ABSOFFSET | TRF_BLOCKUSE | TRF_BLOCKSELF | TRF_SOLIDACTORS,
+					origin.Z, origin.X - mo->X(), origin.Y - mo->Y(), &trace))
+				{
+					vrTeleportTarget = trace.HitType;
+					vrTeleportLocation = trace.HitLocation;
+                    RT_OpenXRInputSetTeleportTarget(vrTeleportTarget == TRACE_HitFloor, (float)vrTeleportLocation.X, (float)vrTeleportLocation.Y, (float)vrTeleportLocation.Z);
+				}
+				else
+				{
+					vrTeleportTarget = TRACE_HitNone;
+					vrTeleportLocation = DVector3();
+                    RT_OpenXRInputSetTeleportTarget(false, 0.0f, 0.0f, 0.0f);
+				}
+			}
+			else
+			{
+				vrTeleportTarget = TRACE_HitNone;
+				vrTeleportLocation = DVector3();
+                    RT_OpenXRInputSetTeleportTarget(false, 0.0f, 0.0f, 0.0f);
+			}
+		}
+		if (teleportActivate && vrTeleportTarget == TRACE_HitFloor)
+		{
+			AActor* mo = players[consoleplayer].mo;
+		const DVector3 oldVelocity = mo->Vel;
+			const double oldZ = mo->Z();
+			const bool wasOnGround = oldZ <= mo->floorz + 0.1;
+			mo->Vel = DVector3(vrTeleportLocation.X - mo->X(), vrTeleportLocation.Y - mo->Y(), 0.0);
+			P_VRMove(mo, DVector2(0.0, 0.0));
+			if (mo->Z() >= oldZ && wasOnGround)
+			{
+				mo->SetZ(mo->floorz);
+			}
+			else
+			{
+				mo->SetZ(oldZ);
+			}
+			mo->Vel = oldVelocity;
+			vrTeleportTarget = TRACE_HitNone;
+			vrTeleportLocation = DVector3();
+                    RT_OpenXRInputSetTeleportTarget(false, 0.0f, 0.0f, 0.0f);
+		}
+	}
+	else
+	{
+		vrTeleportTarget = TRACE_HitNone;
+		vrTeleportLocation = DVector3();
+                    RT_OpenXRInputSetTeleportTarget(false, 0.0f, 0.0f, 0.0f);
+	}
+if (vrmode != nullptr && vrmode->IsVR())
 	{
 		const float yawDeltaDegrees = RT_OpenXRInputConsumeViewYawDeltaDegrees();
 		if (yawDeltaDegrees != 0.0f)
@@ -714,15 +932,15 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	}
 	else
 	{
-		if (buttonMap.ButtonDown(Button_Forward))
+		if (!vrmode->IsVR() && buttonMap.ButtonDown(Button_Forward))
 			forward += moveforward[speed];
-		if (buttonMap.ButtonDown(Button_Back))
+		if (!vrmode->IsVR() && buttonMap.ButtonDown(Button_Back))
 			forward -= moveforward[speed];
 	}
 
-	if (buttonMap.ButtonDown(Button_MoveRight))
+	if (!vrmode->IsVR() && buttonMap.ButtonDown(Button_MoveRight))
 		side += moveside[speed];
-	if (buttonMap.ButtonDown(Button_MoveLeft))
+	if (!vrmode->IsVR() && buttonMap.ButtonDown(Button_MoveLeft))
 		side -= moveside[speed];
 
 	// buttons
@@ -730,9 +948,15 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	if (buttonMap.ButtonDown(Button_AltAttack))		cmd->ucmd.buttons |= BT_ALTATTACK;
 	if (buttonMap.ButtonDown(Button_Use))			cmd->ucmd.buttons |= BT_USE;
 	if (buttonMap.ButtonDown(Button_Jump))			cmd->ucmd.buttons |= BT_JUMP;
-	if (buttonMap.ButtonDown(Button_Crouch))		cmd->ucmd.buttons |= BT_CROUCH;
+	// Natural Crouch uses tracked HMD height as the sole crouch source.
+	// Do not send BT_CROUCH: the normal player command briefly overrides then releases the tracked factor.
+	if (!vr_crouch_use_button && buttonMap.ButtonDown(Button_Crouch)) cmd->ucmd.buttons |= BT_CROUCH;
 	if (buttonMap.ButtonDown(Button_Zoom))			cmd->ucmd.buttons |= BT_ZOOM;
 	if (buttonMap.ButtonDown(Button_Reload))		cmd->ucmd.buttons |= BT_RELOAD;
+    if (buttonMap.ButtonDown(Button_MH_Reload)) cmd->ucmd.buttons |= BT_MAINHANDRELOAD;
+    if (buttonMap.ButtonDown(Button_OH_Reload)) cmd->ucmd.buttons |= BT_OFFHANDRELOAD;
+    if (buttonMap.ButtonDown(Button_OH_Attack)) cmd->ucmd.buttons |= BT_OFFHANDATTACK;
+    if (buttonMap.ButtonDown(Button_OH_AltAttack)) cmd->ucmd.buttons |= BT_OFFHANDALTATTACK;
 
 	if (buttonMap.ButtonDown(Button_User1))			cmd->ucmd.buttons |= BT_USER1;
 	if (buttonMap.ButtonDown(Button_User2))			cmd->ucmd.buttons |= BT_USER2;
@@ -753,6 +977,11 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	if (buttonMap.ButtonDown(Button_MoveUp))		cmd->ucmd.buttons |= BT_MOVEUP;
 	if (buttonMap.ButtonDown(Button_ShowScores))	cmd->ucmd.buttons |= BT_SHOWSCORES;
 	if (speed) cmd->ucmd.buttons |= BT_RUN;
+
+	if (VRWheel_ShouldSuppressGameplayInput())
+	{
+		cmd->ucmd.buttons &= ~(BT_ATTACK | BT_ALTATTACK | BT_USE | BT_RELOAD | BT_MAINHANDRELOAD | BT_OFFHANDRELOAD | BT_OFFHANDATTACK | BT_OFFHANDALTATTACK);
+	}
 
 	// Handle joysticks/game controllers.
 	float joyaxes[NUM_JOYAXIS];
@@ -780,9 +1009,67 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 		G_AddViewAngle(joyint(-1280 * joyaxes[JOYAXIS_Yaw]));
 	}
 
-	side -= joyint(moveside[speed] * joyaxes[JOYAXIS_Side]);
-	forward += joyint(joyaxes[JOYAXIS_Forward] * moveforward[speed]);
+	float roomScaleX = 0.0f;
+	float roomScaleY = 0.0f;
+	RT_OpenXRInputConsumeRoomScaleDelta(&roomScaleX, &roomScaleY);
+	if (vrmode != nullptr && vrmode->IsVR() && !multiplayer &&
+		players[consoleplayer].playerstate == PST_LIVE && players[consoleplayer].mo != nullptr &&
+		players[consoleplayer].mo->health > 0)
+	{
+		AActor* mo = players[consoleplayer].mo;
+		const double oldX = mo->X();
+		const double oldY = mo->Y();
+		const DVector3 oldVelocity = mo->Vel;
+		const double oldZ = mo->Z();
+		const bool wasOnGround = oldZ <= mo->floorz + 0.1;
+		mo->Vel = DVector3(roomScaleX, roomScaleY, 0.0);
+		P_VRMove(mo, DVector2(0.0, 0.0));
+		if (mo->Z() >= oldZ && wasOnGround)
+		{
+			mo->SetZ(mo->floorz);
+		}
+		else
+		{
+			mo->SetZ(oldZ);
+		}
+		mo->Vel = oldVelocity;
+
+		// Roomscale P_VRMove intentionally bypasses PlayerPawn.HandleMovement().
+		// Reuse its running state after an actual successful local displacement.
+		const double movedX = mo->X() - oldX;
+		const double movedY = mo->Y() - oldY;
+		if (movedX * movedX + movedY * movedY > 0.0001)
+		{
+			IFVIRTUALPTRNAME(mo, NAME_PlayerPawn, PlayRunning)
+			{
+				VMValue params[1] = { (DObject*)mo };
+				VMCall(func, params, 1, nullptr, 0);
+			}
+		}
+	}
+	if (vrmode != nullptr && vrmode->IsVR())
+	{
+		float joyforward = 0.0f;
+		float joyside = 0.0f;
+		if (RT_OpenXRInputGetStickMove(&joyforward, &joyside) && (!vr_teleport || multiplayer))
+		{
+			// VR feeds the OpenXR locomotion stick straight into the player ticcmd.
+			VR_ApplyStickMove(moveforward[speed], moveside[speed], joyforward, joyside, forward, side);
+		}
+	}
+	else
+	{
+		side -= joyint(moveside[speed] * joyaxes[JOYAXIS_Side]);
+		forward += joyint(joyaxes[JOYAXIS_Forward] * moveforward[speed]);
+	}
 	fly += joyint(joyaxes[JOYAXIS_Up] * 2048);
+
+	// Match VR: local teleport mode owns locomotion and suppresses the
+	// final stick/keyboard forward-side command after all generic inputs.
+	if (vrmode != nullptr && vrmode->IsVR() && vr_teleport && !multiplayer)
+	{
+		side = forward = 0;
+	}
 
 	// Handle mice.
 	if (!buttonMap.ButtonDown(Button_Mlook) && !freelook)

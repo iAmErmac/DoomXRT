@@ -63,6 +63,7 @@
 #if HAVE_RT
 #include "rt/rt_state.h"
 #include "rt/rt_cvars.h"
+#include "common/rendering/hwrenderer/data/hw_vrmodes.h"
 EXTERN_CVAR(Bool, r_deathcamera)
 #endif
 #include "p_visualthinker.h"
@@ -112,6 +113,68 @@ CUSTOM_CVAR(Int, gl_fuzztype, 0, CVAR_ARCHIVE)
 //
 //==========================================================================
 
+#if HAVE_RT
+void RT_DrawTeleportMarker(HWDrawInfo* di, FRenderState& state)
+{
+	// Renderer-only marker: GetTeleportLocation exposes local visual state only.
+	DVector3 target;
+	auto* vrMode = VRMode::GetVRModeCached(true);
+	if (di == nullptr || vrMode == nullptr || !vrMode->GetTeleportLocation(target)) return;
+	// Camera-facing, half-scale replacement for the old player-sprite marker.
+	const DVector3 center = target + DVector3(0.0, 0.0, 14.0);
+	const float halfWidth = 9.0f;
+	const float height = 21.0f;
+	// This pass does not guarantee ViewVector3D has been populated. Derive a
+	// stable billboard basis from the active camera and the destination instead.
+	DVector3 forward = center - di->Viewpoint.Pos;
+	if (forward.LengthSquared() < 0.001) forward = DVector3(0.0, 1.0, 0.0);
+	forward.MakeUnit();
+	const DVector3 right = forward ^ DVector3(0.0, 0.0, 1.0);
+	const DVector3 safeRight = right.LengthSquared() > 0.001 ? right.Unit() : DVector3(1.0, 0.0, 0.0);
+	DVector3 up = safeRight ^ forward;
+	up.MakeUnit();
+	const DVector3 tip = center - up * (height * 0.5);
+	const DVector3 left = center - safeRight * halfWidth + up * (height * 0.5);
+	const DVector3 rightPoint = center + safeRight * halfWidth + up * (height * 0.5);
+
+	state.SetLightIndex(-1);
+	state.SetRenderStyle(STYLE_Translucent);
+	state.AlphaFunc(Alpha_Greater, 0.0f);
+	state.SetTextureMode(TM_NORMAL);
+	state.ResetColor();
+	state.SetObjectColor(0xffffffff);
+	state.SetAddColor(0);
+	state.SetDynLight(0, 0, 0);
+	state.SetNoSoftLightLevel();
+	state.EnableFog(false);
+	state.SetFog(0, 0);
+	state.EnableTextureMatrix(false);
+	state.mModelMatrix.loadIdentity();
+	state.EnableModelMatrix(false);
+	state.EnableTexture(false);
+	state.EnableBrightmap(false);
+	state.EnableDepthTest(false);
+	state.SetDepthMask(false);
+	state.SetLightParms(1.0f, 0.0f);
+	state.SetColor(1.0f, 0.70f, 0.08f, 0.92f);
+	state.SetVertexBuffer(screen->mVertexData);
+	screen->mVertexData->Map();
+	// Submit both windings: RT world primitives are back-face culled, while this
+	// camera-facing indicator has no stable map-facing normal.
+	auto vert = screen->mVertexData->AllocVertices(6);
+	vert.first[0].Set((float)tip.X, (float)tip.Z, (float)tip.Y, 0.5f, 0.5f);
+	vert.first[1].Set((float)left.X, (float)left.Z, (float)left.Y, 0.5f, 0.5f);
+	vert.first[2].Set((float)rightPoint.X, (float)rightPoint.Z, (float)rightPoint.Y, 0.5f, 0.5f);
+	vert.first[3].Set((float)tip.X, (float)tip.Z, (float)tip.Y, 0.5f, 0.5f);
+	vert.first[4].Set((float)rightPoint.X, (float)rightPoint.Z, (float)rightPoint.Y, 0.5f, 0.5f);
+	vert.first[5].Set((float)left.X, (float)left.Z, (float)left.Y, 0.5f, 0.5f);
+	screen->mVertexData->Unmap();
+	auto markerId = rtstate.push_uniqueid(&state, 0x54454C45504F5254ULL);
+	auto markerPrim = rtstate.push_type(RtPrim::TeleportMarker);
+	state.Draw(DT_Triangles, vert.second, 6);
+
+}
+#endif
 void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 {
 #if HAVE_RT
@@ -150,6 +213,8 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 		rtstate.m_lastthingposition = FVector3{ actor->InterpolatedPosition(di->Viewpoint.TicFrac) };
 	}
 #endif
+
+
 
 	bool additivefog = false;
 	bool foglayer = false;

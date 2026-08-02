@@ -62,6 +62,12 @@ enum class RtPrim : uint32_t
     ExportInstance      = 1 << 10,
     ExportInvertNormals = 1 << 11,
     NoMotionVectors     = 1 << 12,
+    LaserBeam           = 1 << 13,
+    LaserDot            = 1 << 14,
+    Wheel               = 1 << 15,
+    WheelIcon           = 1 << 16,
+    Tracer              = 1 << 17,
+    TeleportMarker      = 1 << 18,
 };
 
 enum class RtManyPrimsPerId : uint32_t

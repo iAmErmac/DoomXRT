@@ -30,6 +30,7 @@
 #include "cmdlib.h"
 #include "sc_man.h"
 #include "m_crc32.h"
+#include "m_argv.h"
 #include "c_console.h"
 #include "g_game.h"
 #include "doomstat.h"
@@ -56,6 +57,7 @@
 CVAR(Bool, gl_interpolate_model_frames, true, CVAR_ARCHIVE)
 EXTERN_CVAR (Bool, r_drawvoxels)
 EXTERN_CVAR(Float, vr_weaponScale)
+EXTERN_CVAR(Float, vr_vunits_per_meter)
 EXTERN_CVAR(Float, vr_3dweaponOffsetX)
 EXTERN_CVAR(Float, vr_3dweaponOffsetY)
 EXTERN_CVAR(Float, vr_3dweaponOffsetZ)
@@ -226,12 +228,20 @@ void RenderHUDModel(FModelRenderer *renderer, DPSprite *psp, FVector3 translatio
 	// The model position and orientation has to be drawn independently from the position of the player,
 	// but we need to position it correctly in the world for light to work properly.
 	VSMatrix objectToWorldMatrix = renderer->GetViewToWorldMatrix();
-	constexpr int hand = VR_MAINHAND;
-	if (RT_OpenXRGetWeaponTransform(&objectToWorldMatrix, hand))
+	const int hand = psp->GetCaller() == playermo->player->OffhandWeapon ? VR_OFFHAND : VR_MAINHAND;
+	auto vrmode = VRMode::GetVRModeCached(true);
+	const bool hasTrackedWeaponTransform = vrmode->GetWeaponTransform(&objectToWorldMatrix, hand);
+	if (hasTrackedWeaponTransform)
 	{
-		const float scale = 0.01f * vr_weaponScale;
+		const float scale = 0.01f * vr_vunits_per_meter;
 		objectToWorldMatrix.scale(scale, scale, scale);
 		objectToWorldMatrix.translate(0, 5, 30);
+	}
+	else if (vrmode->IsVR())
+	{
+		const DVector3 pos = playermo->Pos();
+		objectToWorldMatrix.translate(pos.X, pos.Z + 40, pos.Y);
+		objectToWorldMatrix.rotate(-playermo->Angles.Yaw.Degrees() - 90, 0, 1, 0);
 	}
 
 	// [Nash] Optional scale weapon FOV
@@ -274,7 +284,18 @@ void RenderHUDModel(FModelRenderer *renderer, DPSprite *psp, FVector3 translatio
 	objectToWorldMatrix.rotate(smf->pitchoffset, 0, 0, 1);
 	objectToWorldMatrix.rotate(-smf->rolloffset, 1, 0, 0);
 
+	objectToWorldMatrix.scale(vr_weaponScale, vr_weaponScale, vr_weaponScale);
 	float orientation = smf->xscale * smf->yscale * smf->zscale;
+
+#if HAVE_RT
+	constexpr static float hudVertexAxes[] = {
+		1,0,0,0,
+		0,0,1,0,
+		0,1,0,0,
+		0,0,0,1,
+	};
+	objectToWorldMatrix = VSMatrix::smultMatrix(objectToWorldMatrix.get(), hudVertexAxes);
+#endif
 
 	renderer->BeginDrawHUDModel(playermo->RenderStyle, objectToWorldMatrix, orientation < 0, smf_flags);
 	auto trans = psp->GetTranslation();
@@ -596,7 +617,7 @@ void InitModels()
 	SpriteModelHash.Clear();
 
 #if HAVE_RT
-	if (Voxels.Size() > 0)
+	if (Voxels.Size() > 0 && Args->CheckParm("-nowarning") == 0)
 	{
 		extern void RT_ShowWarningMessageBox(const char *);
 		RT_ShowWarningMessageBox(

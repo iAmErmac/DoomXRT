@@ -277,7 +277,7 @@ class Inventory : Actor
 			return;
 
 		int skip = giver && giver.player ? giver.PlayerNumber() : -1;
-		for (int i; i < MAXPLAYERS; ++i)
+		for (int i = 0; i < MAXPLAYERS; ++i)
 		{
 			if (!playerInGame[i] || i == skip)
 				continue;
@@ -857,7 +857,7 @@ class Inventory : Actor
 				give.ClearCounters();
 		}
 
-		bool res;
+		bool res = false;
 		[res, toucher] = give.CallTryPickup(toucher);
 		if (!res)
 		{
@@ -1126,7 +1126,7 @@ class Inventory : Actor
 	void ClearLocalPickUps()
 	{
 		DisableLocalRendering(consoleplayer, false);
-		for (int i; i < MAXPLAYERS; ++i)
+		for (int i = 0; i < MAXPLAYERS; ++i)
 			pickedUp[i] = false;
 	}
 

@@ -51,6 +51,8 @@
 #include "common/rendering/rt/rt_openxr_input.h"
 #include "vulkan/system/vk_renderdevice.h"
 #include "common/rendering/stereo3d/openxr/oxr_loader.h"
+#include "d_player.h"
+#include "gamedata/a_weapons.h"
 
 // Set up 3D-specific console variables:
 CVAR(Int, vr_mode, 0, CVAR_GLOBALCONFIG|CVAR_ARCHIVE)
@@ -59,6 +61,8 @@ CVAR(Bool, vr_switch_sticks, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_move_use_offhand, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Int, vr_control_scheme, 0, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Int, vr_joy_mode, 1, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+bool weaponStabilised = false;
+
 CVAR(Bool, vr_secondary_button_mappings, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_two_handed_weapons, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Float, vr_weaponRotate, -30.f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
@@ -72,12 +76,45 @@ CVAR(Float, vr_2dweaponOffsetZ, 0.f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Float, vr_2dweaponScale, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_enable_haptics, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Float, vr_pickup_haptic_level, 0.2f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_missile_haptic_level, 0.6f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Float, vr_quake_haptic_level, 0.8f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_menu_pointer, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Color, vr_menu_pointer_color, 0xffffff, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_mouse_in_menu, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_teleport, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_momentum, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_crouch_use_button, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_laser_sight, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Color, vr_laser_color, 0xff0000, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_laser_show_melee, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_laser_hide_on_wheel, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_laser_beam, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_laser_other_players_beam, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_laser_other_players_pointer, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_laser_beam_alpha, 0.3f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_laser_beam_width, 0.15f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_laser_pointer_scale, 0.1f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_laser_pointer_alpha, 0.9f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_laser_pointer_glow_scale, 1.5f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_laser_pointer_glow_intensity, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Int, vr_laser_beam_length, 0, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Int, vr_laser_fixed_length, 100, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_laser_source_offset_x, 0.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_laser_source_offset_y, 0.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_laser_source_offset_z, 0.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CUSTOM_CVAR(Int, vr_hitscan_tracer, 0, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+{
+    if (self < 0) self = 0;
+    else if (self > 2) self = 2;
+}
+CVAR(Color, vr_hitscan_tracer_color, 0xffc040, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_hitscan_tracer_alpha, 0.75f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_hitscan_tracer_length, 50.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_hitscan_tracer_width, 0.25f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_hitscan_tracer_speed, 26.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_hitscan_tracer_offset, 8.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Bool, vr_hitscan_ricochet, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_hitscan_ricochet_chance, 20.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Float, vr_momentum_threshold, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
 // VR virtual-screen presentation controls.
@@ -119,6 +156,8 @@ CVAR(Float, vr_ipd, 0.062f, CVAR_ARCHIVE|CVAR_GLOBALCONFIG) // METERS
 CVAR(Float, vr_screendist, 0.80f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG) // METERS
 
 // default conversion between (vertical) DOOM units and meters
+CVAR(Float, vr_vunits_per_meter, 34.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, vr_height_adjust, 0.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Float, vr_hunits_per_meter, 41.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG) // METERS
 EXTERN_CVAR(Float, turbo)
 CUSTOM_CVAR(Int, vr_move_speed, 19, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOINITCALL) { turbo->Callback(); }
@@ -184,7 +223,7 @@ namespace
 			}
 
 			IntRect fullTargetRect = { 0, 0, (int)mVirtualScreenWidth, (int)mVirtualScreenHeight };
-			postprocess->DrawPresentTextureToImage(mCurrentSwapchainTexture, (VkFormat)mSwapchainFormat, fullTargetRect, true, false, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			postprocess->DrawPresentTextureToImage(mCurrentSwapchainTexture, (VkFormat)mSwapchainFormat, fullTargetRect, true, false, true, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 			mVirtualScreenPopulatedThisFrame = true;
 			return true;
 		}
@@ -202,7 +241,7 @@ namespace
 			}
 
 			IntRect fullTargetRect = { 0, 0, (int)mVirtualScreenWidth, (int)mVirtualScreenHeight };
-			postprocess->DrawPresentTextureToImage(mCurrentSwapchainTexture, (VkFormat)mSwapchainFormat, fullTargetRect, true, false, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			postprocess->DrawPresentTextureToImage(mCurrentSwapchainTexture, (VkFormat)mSwapchainFormat, fullTargetRect, true, false, true, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
 		void PollXREvents() const override
 		{
@@ -396,9 +435,8 @@ namespace
 		bool GetHandTransform(int hand, VSMatrix* out) const override
 		{
 			if (out == nullptr || hand < VR_MAINHAND || hand > VR_OFFHAND) return false;
-			const int trackedHand = ((vr_control_scheme < 10) == (hand == VR_MAINHAND)) ? 1 : 0;
 			RT_OpenXRWorldHandPose pose;
-			if (!RT_OpenXRInputGetWorldHandPose(trackedHand, &pose)) return false;
+			if (!RT_OpenXRInputGetWorldHandPose(hand, &pose)) return false;
 			auto normalize = [](RgFloat3D v) {
 				const float length = std::sqrt(v.data[0] * v.data[0] + v.data[1] * v.data[1] + v.data[2] * v.data[2]);
 				return length > 0.0001f ? RgFloat3D{{ v.data[0] / length, v.data[1] / length, v.data[2] / length }} : RgFloat3D{};
@@ -422,20 +460,40 @@ namespace
 		}
 		bool GetWeaponTransform(VSMatrix* out, int hand = VR_MAINHAND) const override
 		{
-			if (hand != VR_MAINHAND || !vr_two_handed_weapons) return GetHandTransform(hand, out);
+			weaponStabilised = false;
+			if (out == nullptr || hand < VR_MAINHAND || hand > VR_OFFHAND) return false;
+
+			bool autoReverse = true;
+			player_t* player = &players[consoleplayer];
+			if (player != nullptr)
+			{
+				AActor* weapon = hand == VR_OFFHAND ? player->OffhandWeapon : player->ReadyWeapon;
+				autoReverse = weapon == nullptr || !(weapon->IntVar(NAME_WeaponFlags) & WIF_NO_AUTO_REVERSE);
+			}
 			const int mainHand = vr_control_scheme < 10 ? 1 : 0;
-			const int offHand = mainHand == 0 ? 1 : 0;
+			const int physicalHand = hand == VR_OFFHAND ? 1 - mainHand : mainHand;
+			const auto getWeaponHandTransform = [&]()
+			{
+				if (!GetHandTransform(physicalHand, out)) return false;
+				if (!physicalHand && autoReverse) out->scale(-1.0f, 1.0f, 1.0f);
+				return true;
+			};
+			if (hand != VR_MAINHAND || !vr_two_handed_weapons) return getWeaponHandTransform();
+
+			const int offHand = 1 - mainHand;
 			RT_OpenXRWorldHandPose mainPose, offPose;
 			if (!RT_OpenXRInputGetWorldHandPose(mainHand, &mainPose) ||
 				!RT_OpenXRInputGetWorldHandPose(offHand, &offPose) ||
-				!RT_OpenXRInputIsHandGripping(offHand)) return GetHandTransform(hand, out);
+				!RT_OpenXRInputIsHandGripping(offHand)) return getWeaponHandTransform();
 			RgFloat3D forward{{
 				offPose.position.data[0] - mainPose.position.data[0],
 				offPose.position.data[1] - mainPose.position.data[1],
 				offPose.position.data[2] - mainPose.position.data[2],
 			}};
 			const float distance = std::sqrt(forward.data[0] * forward.data[0] + forward.data[1] * forward.data[1] + forward.data[2] * forward.data[2]);
-			if (distance <= 0.05f || distance >= 0.50f) return GetHandTransform(hand, out);
+			const float metersToWorldUnits = float(vr_vunits_per_meter);
+			if (distance <= 0.05f * metersToWorldUnits || distance >= 0.50f * metersToWorldUnits) return getWeaponHandTransform();
+			weaponStabilised = true;
 			forward = {{ forward.data[0] / distance, forward.data[1] / distance, forward.data[2] / distance }};
 			RgFloat3D right{{
 				forward.data[1] * mainPose.up.data[2] - forward.data[2] * mainPose.up.data[1],
@@ -443,7 +501,7 @@ namespace
 				forward.data[0] * mainPose.up.data[1] - forward.data[1] * mainPose.up.data[0],
 			}};
 			const float rightLength = std::sqrt(right.data[0] * right.data[0] + right.data[1] * right.data[1] + right.data[2] * right.data[2]);
-			if (rightLength <= 0.0001f) return GetHandTransform(hand, out);
+			if (rightLength <= 0.0001f) return getWeaponHandTransform();
 			right = {{ right.data[0] / rightLength, right.data[1] / rightLength, right.data[2] / rightLength }};
 			const RgFloat3D up{{
 				right.data[1] * forward.data[2] - right.data[2] * forward.data[1],
@@ -457,6 +515,7 @@ namespace
 				mainPose.position.data[0], mainPose.position.data[1], mainPose.position.data[2], 1.0f,
 			};
 			out->loadMatrix(matrix);
+			if (!mainHand && autoReverse) out->scale(-1.0f, 1.0f, 1.0f);
 			return true;
 		}
 		bool RenderPlayerSpritesInScene() const override { return true; }
@@ -476,7 +535,13 @@ namespace
 		{
 			state.EnableModelMatrix(false);
 		}
-		bool GetTeleportLocation(DVector3&) const override { return false; }
+		bool GetTeleportLocation(DVector3& out) const override
+		{
+			float x, y, z;
+			if (!RT_OpenXRInputGetTeleportLocation(&x, &y, &z)) return false;
+			out = DVector3(x, y, z);
+			return true;
+		}
 		bool IsInitialized() const override { return EnsureInitialized(); }
 		bool RenderDesktopMirror(VulkanRenderDevice*, VulkanImage*) const override { return false; }
 		void Present() const override {}
@@ -800,10 +865,42 @@ namespace
 		bool BeginXRFrame() const override { return false; }
 		bool AcquireXRSwapchain() const override { return false; }
 		bool SubmitFrame() const override { return false; }
-		bool GetHandTransform(int, VSMatrix*) const override { return false; }
-		bool GetWeaponTransform(VSMatrix* out, int hand = VR_MAINHAND) const override { return VRMode::GetWeaponTransform(out, hand); }
+bool GetHandTransform(int hand, VSMatrix* out) const override
+		{
+			if (out == nullptr || hand < VR_MAINHAND || hand > VR_OFFHAND) return false;
+			const int trackedHand = ((vr_control_scheme < 10) == (hand == VR_MAINHAND)) ? 1 : 0;
+			RT_OpenXRWorldHandPose pose;
+			if (!RT_OpenXRInputGetWorldHandPose(trackedHand, &pose)) return false;
+			auto normalize = [](RgFloat3D v) { const float length = std::sqrt(v.data[0]*v.data[0] + v.data[1]*v.data[1] + v.data[2]*v.data[2]); return length > 0.0001f ? RgFloat3D{{v.data[0]/length, v.data[1]/length, v.data[2]/length}} : RgFloat3D{}; };
+			const RgFloat3D forward = normalize(pose.forward), up = normalize(pose.up);
+			const RgFloat3D right = normalize(RgFloat3D{{forward.data[1]*up.data[2]-forward.data[2]*up.data[1], forward.data[2]*up.data[0]-forward.data[0]*up.data[2], forward.data[0]*up.data[1]-forward.data[1]*up.data[0]}});
+			if (right.data[0] == 0.0f && right.data[1] == 0.0f && right.data[2] == 0.0f) return false;
+			const FLOATTYPE matrix[16] = { right.data[0],right.data[1],right.data[2],0, up.data[0],up.data[1],up.data[2],0, -forward.data[0],-forward.data[1],-forward.data[2],0, pose.position.data[0],pose.position.data[1],pose.position.data[2],1 };
+			out->loadMatrix(matrix); return true;
+		} AdjustPlayerSprites(FRenderState& state, int hand = VR_MAINHAND) const override
+		{
+			if (GetWeaponTransform(&state.mModelMatrix, hand))
+			{
+				const float scale = 0.04f * vr_weaponScale * vr_2dweaponScale;
+				state.mModelMatrix.scale(scale, -scale, scale);
+				state.mModelMatrix.translate(-screen->GetWidth() / 2, -screen->GetHeight() * 3 / 4, 0.0f);
+				constexpr float offsetFactor = 40.f;
+				state.mModelMatrix.translate(vr_2dweaponOffsetX * offsetFactor, -vr_2dweaponOffsetY * offsetFactor, vr_2dweaponOffsetZ * offsetFactor);
+			}
+			state.EnableModelMatrix(true);
+		}
+		void UnAdjustPlayerSprites(FRenderState& state) const override
+		{
+		state.EnableModelMatrix(false);
+		}
 		bool RenderPlayerSpritesInScene() const override { return false; }
-		bool GetTeleportLocation(DVector3&) const override { return false; }
+		bool GetTeleportLocation(DVector3& out) const override
+		{
+			float x, y, z;
+			if (!RT_OpenXRInputGetTeleportLocation(&x, &y, &z)) return false;
+			out = DVector3(x, y, z);
+			return true;
+		}
 		bool IsInitialized() const override { return true; }
 		bool RenderDesktopMirror(VulkanRenderDevice*, VulkanImage*) const override { return false; }
 		void Present() const override {}
@@ -1093,3 +1190,5 @@ bool VRMode::GetWeaponTransform(VSMatrix* out, int hand) const
 
 	return GetHandTransform(hand, out);
 }
+
+CVAR(Bool, use_action_spawn_yzoffset, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)

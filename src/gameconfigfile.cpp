@@ -674,6 +674,11 @@ void FGameConfigFile::DoGlobalSetup ()
 					var->SetGenericRep(v, CVAR_Float);
 				}
 			}
+            if (last < 224)
+            {
+                if (FBaseCVar *var = FindCVar("vr_move_use_offhand", NULL))
+                    var->ResetToDefault();
+            }
 			if (last < 225)
 			{
 				if (const auto var = FindCVar("gl_lightmode", NULL))

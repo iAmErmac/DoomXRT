@@ -13,6 +13,9 @@ EXTERN_CVAR(Float, snd_menuvolume)
 EXTERN_CVAR(Int, m_use_mouse);
 extern bool menu_allow_mouse_override;
 
+// Marks GUI mouse events emitted by a tracked VR controller rather than a physical mouse.
+constexpr int GUI_MOUSE_VIRTUAL = 1 << 14;
+
 
 struct event_t;
 class FTexture;

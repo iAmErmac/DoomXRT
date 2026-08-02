@@ -35,7 +35,6 @@ class Gauntlets : Weapon
 		GAUN B 4 A_StartSound("weapons/gauntletsuse", CHAN_WEAPON);
 		GAUN C 4;
 	Hold:
-		GAUN D 0 A_Light1;
 		GAUN DEF 4 BRIGHT A_GauntletAttack(0);
 		GAUN C 4 A_ReFire;
 		GAUN B 4 A_Light0;
@@ -62,13 +61,19 @@ class Gauntlets : Weapon
 			return;
 		}
 
-		Weapon weapon = player.ReadyWeapon;
+		int hand = 0;
+		int laflags = 0;
+		int alflags = 0;
+		Weapon weapon = invoker == player.OffhandWeapon ? player.OffhandWeapon : player.ReadyWeapon;
 		if (weapon != null)
 		{
+			hand = weapon.bOffhandWeapon ? 1 : 0;
+			laflags |= hand ? LAF_ISOFFHAND : 0;
+			alflags |= hand ? ALF_ISOFFHAND : 0;
 			if (!weapon.DepleteAmmo (weapon.bAltFire))
 				return;
 			
-			let psp = player.GetPSprite(PSP_WEAPON);
+			let psp = player.GetPSprite(hand ? PSP_OFFHANDWEAPON : PSP_WEAPON);
 			if (psp)
 			{
 				psp.x = ((random[GauntletAtk](0, 3)) - 2);
@@ -90,8 +95,8 @@ class Gauntlets : Weapon
 			ang += random2[GauntletAtk]() * (5.625 / 256);
 			pufftype = "GauntletPuff1";
 		}
-		double slope = AimLineAttack (ang, dist);
-		[puff, actualdamage] = LineAttack (ang, dist, slope, damage, 'Melee', pufftype, false, t);
+		double slope = AimLineAttack (ang, dist, flags: alflags);
+		[puff, actualdamage] = LineAttack (ang, dist, slope, damage, 'Melee', pufftype, laflags, t);
 		if (!t.linetarget)
 		{
 			if (random[GauntletAtk]() > 64)
@@ -123,23 +128,28 @@ class Gauntlets : Weapon
 		{
 			A_StartSound ("weapons/gauntletshit", CHAN_AUTO);
 		}
-		// turn to face target
-		ang = t.angleFromSource;
-		double anglediff = deltaangle(angle, ang);
 
-		if (anglediff < 0.0)
+		if (!player.PlayInVR || (!multiplayer && vanilla_melee_attack))
 		{
-			if (anglediff < -4.5)
-				angle = ang + 90.0 / 21;
+			// turn to face target
+			ang = t.angleFromSource;
+			double anglediff = deltaangle(angle, ang);
+
+			if (anglediff < 0.0)
+			{
+				if (anglediff < -4.5)
+					angle = ang + 90.0 / 21;
+				else
+					angle -= 4.5;
+			}
 			else
-				angle -= 4.5;
-		}
-		else
-		{
-			if (anglediff > 4.5)
-				angle = ang - 90.0 / 21;
-			else
-				angle += 4.5;
+			{
+				if (anglediff > 4.5)
+					angle = ang - 90.0 / 21;
+				else
+					angle += 4.5;
+			}
+			player.resetDoomYaw = true;
 		}
 		bJustAttacked = true;
 	}
@@ -171,7 +181,6 @@ class GauntletsPowered : Gauntlets
 		GAUN J 4 A_StartSound("weapons/gauntletsuse", CHAN_WEAPON);
 		GAUN K 4;
 	Hold:
-		GAUN L 0 A_Light2;
 		GAUN LMN 4 BRIGHT A_GauntletAttack(1);
 		GAUN K 4 A_ReFire;
 		GAUN J 4 A_Light0;

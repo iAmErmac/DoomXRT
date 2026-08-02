@@ -31,6 +31,7 @@
 **
 */
 #include "events.h"
+#include "playsim/p_hitscantracer.h"
 #include "vmintern.h"
 #include "r_utility.h"
 #include "g_levellocals.h"
@@ -746,6 +747,8 @@ void EventManager::WorldHitscanFired(AActor* actor, const DVector3& AttackPos, c
 	if (actor->ObjectFlags & OF_EuthanizeMe)
 		return;
 
+		P_QueueHitscanTracer(actor, AttackPos, DamagePosition, flags);
+
 	if (ShouldCallStatic(true)) staticEventManager.WorldHitscanFired(actor, AttackPos, DamagePosition, Inflictor, flags);
 
 	for (DStaticEventHandler* handler = FirstEventHandler; handler; handler = handler->next)
@@ -757,6 +760,8 @@ void EventManager::WorldRailgunFired(AActor* actor, const DVector3& AttackPos, c
 	// don't call anything if actor was destroyed on PostBeginPlay/BeginPlay/whatever.
 	if (actor->ObjectFlags & OF_EuthanizeMe)
 		return;
+
+		P_QueueHitscanTracer(actor, AttackPos, DamagePosition, flags);
 
 	if (ShouldCallStatic(true)) staticEventManager.WorldRailgunFired(actor, AttackPos, DamagePosition, Inflictor, flags);
 

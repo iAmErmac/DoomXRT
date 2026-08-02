@@ -4,8 +4,10 @@
 #include "common/console/keydef.h"
 #include "common/engine/m_joy.h"
 #include "common/rendering/hwrenderer/data/hw_vrmodes.h"
+#include "common/rendering/hwrenderer/data/hw_vrwheel.h"
 #include "common/engine/d_gui.h"
 #include "common/menu/menustate.h"
+#include "common/menu/menu.h"
 #include "common/console/c_dispatch.h"
 #include "printf.h"
 #include "common/rendering/v_video.h"
@@ -14,15 +16,24 @@
 #include <cmath>
 
 EXTERN_CVAR(Bool, vr_switch_sticks)
-EXTERN_CVAR(Bool, vr_move_use_offhand)
+EXTERN_CVAR(Bool, vr_teleport)
 EXTERN_CVAR(Float, vr_snapTurn)
 EXTERN_CVAR(Int, vr_control_scheme)
 EXTERN_CVAR(Int, vr_joy_mode)
+EXTERN_CVAR(Bool, vr_two_handed_weapons)
 EXTERN_CVAR(Bool, vr_secondary_button_mappings)
 EXTERN_CVAR(Bool, vr_menu_pointer)
 EXTERN_CVAR(Bool, vr_enable_haptics)
 EXTERN_CVAR(Float, vr_pickup_haptic_level)
 EXTERN_CVAR(Float, vr_quake_haptic_level)
+EXTERN_CVAR(Float, vr_missile_haptic_level)
+EXTERN_CVAR(Float, ext_haptic_level_global_intensity)
+EXTERN_CVAR(Float, ext_haptic_level_damage_projectile)
+EXTERN_CVAR(Float, ext_haptic_level_pickup)
+EXTERN_CVAR(Float, ext_haptic_level_fire_weapon)
+EXTERN_CVAR(Float, ext_haptic_level_poison)
+EXTERN_CVAR(Float, ext_haptic_level_healstation)
+EXTERN_CVAR(Float, ext_haptic_level_rumble)
 EXTERN_CVAR(Bool, vr_mouse_in_menu)
 EXTERN_CVAR(Float, vr_weaponRotate)
 EXTERN_CVAR(Color, vr_menu_pointer_color)
@@ -42,21 +53,37 @@ RgOpenXRInputSnapshotEXT previous{};
 bool snapTurnLatched = false;
 bool pointerHeld = false;
 bool pointerRightHeld = false;
-int pointerWheelCooldown = 0;
+bool pointerHadPos = false;
+int pointerLastX = 0;
+int pointerLastY = 0;
+bool pointerWheelNeutral = true;
+std::chrono::steady_clock::time_point pointerWheelCooldownUntil{};
+bool pointerSuppressTriggerUntilRelease = false;
 int pointerX = 0;
 int pointerY = 0;
 bool pointerActive = false;
 bool previousSecondaryButtonMappings = false;
 float configuredDead[4] = { .25f,.25f,.25f,.25f };
-float configuredScale[4] = { 1,1,1,1 };
-EJoyAxis configuredMap[4] = { JOYAXIS_Side, JOYAXIS_Forward, JOYAXIS_None, JOYAXIS_None };
-float configuredSensitivity = 1.0f;
 RT_OpenXRWorldHandPose worldHandPoses[2];
 float pendingViewYawDeltaDegrees = 0.0f;
+float snapTurnOffsetDegrees = 0.0f;
+float pendingRoomScaleX = 0.0f;
+float pendingRoomScaleY = 0.0f;
+float pendingHeadHeightDelta = 0.0f;
+bool teleportReady = false;
+bool teleportTrigger = false;
+bool teleportTargetValid = false;
+float teleportTarget[3]{};
 float turnRate = 0.0f;
 RT_OpenXRHandPose handPoses[2];
 std::chrono::steady_clock::time_point hapticReady[2];
 int MainHandIndex() { return vr_control_scheme < 10 ? 1 : 0; }
+int OffHandIndex() { return MainHandIndex() == 0 ? 1 : 0; }
+
+float ScaleHaptic(float amplitude, float eventScale)
+{
+    return std::clamp(amplitude * eventScale * (float)ext_haptic_level_global_intensity, 0.0f, 1.0f);
+}
 
 void EmitHaptic(int hand, float durationSeconds, float amplitude)
 {
@@ -82,16 +109,6 @@ RgFloat2D FilterMovementStick(const RgFloat2D& stick)
 	const float filteredLength = std::pow((length - deadZone) / (1.0f - deadZone), power);
 	const float divisor = std::max(length, 1.0f);
 	RgFloat2D result{{ filteredLength * stick.data[0] / divisor, filteredLength * stick.data[1] / divisor }};
-	const float x = std::fabs(stick.data[0]);
-	const float y = std::fabs(stick.data[1]);
-	if (y > x && (x == 0.0f || y / x > 1.10f))
-	{
-		result.data[0] = 0.0f;
-	}
-	else if (x > y && (y == 0.0f || x / y > 1.10f))
-	{
-		result.data[1] = 0.0f;
-	}
 	if (std::fabs(result.data[0]) + std::fabs(result.data[1]) <= 0.05f)
 	{
 		result = {{ 0.0f, 0.0f }};
@@ -100,14 +117,20 @@ RgFloat2D FilterMovementStick(const RgFloat2D& stick)
 }
 
 int64_t previousFrameTime = 0;
-bool MovementUsesRight() { return vr_switch_sticks != vr_move_use_offhand; }
+bool MovementUsesRight()
+{
+    // VR OpenXR: movement is on the offhand stick by default, and
+    // vr_switch_sticks exchanges the semantic main/offhand stick roles.
+    const int movementHand = vr_switch_sticks ? MainHandIndex() : OffHandIndex();
+    return movementHand == 1;
+}
 
 void PostKey(int key, bool down)
 {
     event_t ev{};
     ev.type = down ? EV_KeyDown : EV_KeyUp;
     ev.data1 = key;
-    ev.data2 = key;
+
     D_PostEvent(&ev);
 }
 
@@ -144,7 +167,8 @@ RgQuaternion QuaternionFromBasis(const RgFloat3D& x, const RgFloat3D& y, const R
 }
 void PostGui(EGUIEvent subtype, int x, int y)
 {
-    event_t ev{}; ev.type = EV_GUI_Event; ev.subtype = subtype; ev.data1 = static_cast<int16_t>(x); ev.data2 = static_cast<int16_t>(y); D_PostEvent(&ev);
+    const bool virtualMouseEvent = subtype >= EV_GUI_FirstMouseEvent && subtype <= EV_GUI_LastMouseEvent;
+    event_t ev{}; ev.type = EV_GUI_Event; ev.subtype = subtype; ev.data1 = static_cast<int16_t>(x); ev.data2 = static_cast<int16_t>(y); ev.data3 = virtualMouseEvent ? GUI_MOUSE_VIRTUAL : 0; D_PostEvent(&ev);
 }
 void SubmitPointerBeam(const RgOpenXRMenuPointerBeamEXT& beam)
 {
@@ -154,9 +178,24 @@ void SubmitPointerBeam(const RgOpenXRMenuPointerBeamEXT& beam)
 void PostPointerWheel(const RgOpenXRControllerStateEXT& pointer)
 {
     if (vr_joy_mode != 1) return;
-    if (pointerWheelCooldown > 0) --pointerWheelCooldown;
-    if (pointerWheelCooldown == 0 && pointer.stick.data[1] >= 0.55f) { PostGui(EV_GUI_WheelUp, pointerX, pointerY); pointerWheelCooldown = 8; }
-    else if (pointerWheelCooldown == 0 && pointer.stick.data[1] <= -0.55f) { PostGui(EV_GUI_WheelDown, pointerX, pointerY); pointerWheelCooldown = 8; }
+    const float y = pointer.stick.data[1];
+    const auto now = std::chrono::steady_clock::now();
+    if (std::fabs(y) < 0.35f) pointerWheelNeutral = true;
+    if (pointerWheelNeutral && now >= pointerWheelCooldownUntil)
+    {
+        if (y > 0.85f)
+        {
+            PostGui(EV_GUI_WheelUp, pointerX, pointerY);
+            pointerWheelNeutral = false;
+            pointerWheelCooldownUntil = now + std::chrono::milliseconds(160);
+        }
+        else if (y < -0.85f)
+        {
+            PostGui(EV_GUI_WheelDown, pointerX, pointerY);
+            pointerWheelNeutral = false;
+            pointerWheelCooldownUntil = now + std::chrono::milliseconds(160);
+        }
+    }
 }
 void PollPointer(const RgOpenXRInputSnapshotEXT& current, const RgOpenXRInputSnapshotEXT&)
 {
@@ -168,17 +207,19 @@ void PollPointer(const RgOpenXRInputSnapshotEXT& current, const RgOpenXRInputSna
     {
         if (pointerHeld) { PostGui(EV_GUI_LButtonUp, 0, 0); pointerHeld = false; }
         if (pointerRightHeld) { PostGui(EV_GUI_RButtonUp, 0, 0); pointerRightHeld = false; }
-        pointerWheelCooldown = 0;
+        pointerWheelNeutral = true;
+        pointerWheelCooldownUntil = {};
+        pointerHadPos = false;
         SubmitPointerBeam({RG_STRUCTURE_TYPE_OPENXR_MENU_POINTER_BEAM_EXT, nullptr, RG_FALSE});
         return;
     }
+    const RgFloat3D relativeOrigin{{pointer.pose.position.data[0] - current.virtualScreenPose.position.data[0], pointer.pose.position.data[1] - current.virtualScreenPose.position.data[1], pointer.pose.position.data[2] - current.virtualScreenPose.position.data[2]}};
+    const RgQuaternion& screenQ = current.virtualScreenPose.orientation;
+    const RgQuaternion inverseScreen{{-screenQ.data[0], -screenQ.data[1], -screenQ.data[2], screenQ.data[3]}};
     constexpr float pi = 3.14159265358979323846f;
     const float pointerRotation = -(vr_weaponRotate * 2.0f) * pi / 180.0f;
     const RgQuaternion pointerAlign{{0, 0, std::sin(pointerRotation * 0.5f), std::cos(pointerRotation * 0.5f)}};
     const RgQuaternion pointerOrientation = Multiply(pointer.pose.orientation, pointerAlign);
-    const RgFloat3D relativeOrigin{{pointer.pose.position.data[0] - current.virtualScreenPose.position.data[0], pointer.pose.position.data[1] - current.virtualScreenPose.position.data[1], pointer.pose.position.data[2] - current.virtualScreenPose.position.data[2]}};
-    const RgQuaternion& screenQ = current.virtualScreenPose.orientation;
-    const RgQuaternion inverseScreen{{-screenQ.data[0], -screenQ.data[1], -screenQ.data[2], screenQ.data[3]}};
     const RgFloat3D worldDirection = Rotate(pointerOrientation, {{0, 0, -1}});
     const RgFloat3D localOrigin = Rotate(inverseScreen, relativeOrigin);
     const RgFloat3D localDirection = Rotate(inverseScreen, worldDirection);
@@ -210,19 +251,25 @@ void PollPointer(const RgOpenXRInputSnapshotEXT& current, const RgOpenXRInputSna
     if (inside || dragging)
     {
         pointerActive = true;
-        menu_allow_mouse_override = true;
         pointerX = px;
         pointerY = py;
-        PostGui(EV_GUI_MouseMove, px, py);
+        if (!pointerHadPos || px != pointerLastX || py != pointerLastY)
+        {
+            PostGui(EV_GUI_MouseMove, px, py);
+            pointerLastX = px;
+            pointerLastY = py;
+        }
+        pointerHadPos = true;
         const bool click = pointer.trigger > 0.5f;
-        if (click != pointerHeld) { PostGui(click ? EV_GUI_LButtonDown : EV_GUI_LButtonUp, px, py); pointerHeld = click; }
+        if (click != pointerHeld) { PostGui(click ? EV_GUI_LButtonDown : EV_GUI_LButtonUp, pointerLastX, pointerLastY); pointerHeld = click; if (click) pointerSuppressTriggerUntilRelease = true; }
         const bool rightClick = vr_mouse_in_menu && pointer.grip > 0.5f;
-        if (rightClick != pointerRightHeld) { PostGui(rightClick ? EV_GUI_RButtonDown : EV_GUI_RButtonUp, px, py); pointerRightHeld = rightClick; }
+        if (rightClick != pointerRightHeld) { PostGui(rightClick ? EV_GUI_RButtonDown : EV_GUI_RButtonUp, pointerLastX, pointerLastY); pointerRightHeld = rightClick; }
     }
     else
     {
         if (pointerHeld) { PostGui(EV_GUI_LButtonUp, 0, 0); pointerHeld = false; }
         if (pointerRightHeld) { PostGui(EV_GUI_RButtonUp, 0, 0); pointerRightHeld = false; }
+        pointerHadPos = false;
     }
     PostPointerWheel(pointer);
 }
@@ -296,7 +343,6 @@ void RemappedStickEdges(const RgFloat2D& current, const RgFloat2D& old, bool old
     RemappedEdge(oldUp, newUp, oldModifier, newModifier, baseUp, modifiedUp);
 }
 }
-
 void RT_OpenXRInputBindModule(
 #ifdef _WIN32
     HMODULE module
@@ -323,6 +369,14 @@ void ReleaseAll()
     const auto& move = swap ? previous.right.stick : previous.left.stick;
     const auto& turn = swap ? previous.left.stick : previous.right.stick;
     pendingViewYawDeltaDegrees = 0.0f;
+    snapTurnOffsetDegrees = 0.0f;
+    pendingRoomScaleX = 0.0f;
+    pendingRoomScaleY = 0.0f;
+    pendingHeadHeightDelta = 0.0f;
+    teleportReady = false;
+    teleportTrigger = false;
+    teleportTargetValid = false;
+    teleportTarget[0] = teleportTarget[1] = teleportTarget[2] = 0.0f;
     const auto releaseStick = [](const RgFloat2D& stick, int right, int left, int down, int up) {
         constexpr float deadZone = 0.22f;
         if (stick.data[0] > deadZone) PostKey(right, false); if (stick.data[0] < -deadZone) PostKey(left, false);
@@ -342,11 +396,14 @@ void ReleaseAll()
     PostKey(KEY_TAB, false); PostKey(KEY_HOME, false); PostKey(KEY_BACKSPACE, false); PostKey(KEY_PGDN, false); PostKey(KEY_PGUP, false); PostKey(KEY_PAD_DPAD_UP, false);
     if (pointerHeld) { PostGui(EV_GUI_LButtonUp, 0, 0); pointerHeld = false; }
     if (pointerRightHeld) { PostGui(EV_GUI_RButtonUp, 0, 0); pointerRightHeld = false; }
-    pointerWheelCooldown = 0;
+    pointerWheelNeutral = true;
+    pointerWheelCooldownUntil = {};
+    pointerSuppressTriggerUntilRelease = false;
 }
 
 void RT_OpenXRInputReset()
 {
+    VRWheel_Reset();
     ReleaseAll();
     worldHandPoses[0] = {};
     worldHandPoses[1] = {};
@@ -360,17 +417,38 @@ void RT_OpenXRInputReset()
     previousSecondaryButtonMappings = vr_secondary_button_mappings;
     previousFrameTime = 0;
 }
+
+void RT_OpenXRInputClearTrackingDeltas()
+{
+    pendingRoomScaleX = 0.0f;
+    pendingRoomScaleY = 0.0f;
+    pendingHeadHeightDelta = 0.0f;
+    teleportTargetValid = false;
+    teleportTarget[0] = teleportTarget[1] = teleportTarget[2] = 0.0f;
+    VRWheel_Reset();
+}
+
+// VR supplies OpenXR locomotion directly to G_BuildTiccmd. Do not route
+// it through the generic joystick axis layer, which can bypass the ordinary
+// player movement command and leave the pawn in PLAYA while moving.
 void RT_OpenXRInputAddAxes(float axes[])
 {
-    if (!getSnapshot || !previous.sessionRunning || !previous.focused) return;
+    (void)axes;
+}
+
+bool RT_OpenXRInputGetStickMove(float* forward, float* side)
+{
+    if (forward == nullptr || side == nullptr || !getSnapshot || !previous.sessionRunning ||
+        !previous.focused || menuactive != MENU_Off)
+    {
+        return false;
+    }
 
     const auto& moveStick = MovementUsesRight() ? previous.right.stick : previous.left.stick;
-    const auto& turnStick = MovementUsesRight() ? previous.left.stick : previous.right.stick;
     const RgFloat2D filteredMove = FilterMovementStick(moveStick);
-    const float values[4] = {
-        -filteredMove.data[0], filteredMove.data[1],
-        turnStick.data[0], turnStick.data[1] };
-    for (int i=0; i<4; ++i) { float v=values[i], a=std::fabs(v); if (a <= configuredDead[i]) v=0; else v=(v>0?1:-1)*(a-configuredDead[i])/(1-configuredDead[i]); if (configuredMap[i] != JOYAXIS_None) axes[configuredMap[i]] += v*configuredScale[i]*configuredSensitivity; }
+    *forward = filteredMove.data[1];
+    *side = filteredMove.data[0];
+    return true;
 }
 void RT_OpenXRInputPoll()
 {
@@ -389,9 +467,27 @@ void RT_OpenXRInputPoll()
     }
     const auto& moveStick = MovementUsesRight() ? current.right.stick : current.left.stick;
     const auto& turnStick = MovementUsesRight() ? current.left.stick : current.right.stick;
-    StickEdges(moveStick, KEY_PAD_LTHUMB_RIGHT, KEY_PAD_LTHUMB_LEFT,
+    const bool secondaryMappings = vr_secondary_button_mappings;
+    const int mainHand = MainHandIndex();
+    const bool dominantGripModifier = secondaryMappings && (mainHand == 0 ? current.left.grip : current.right.grip) > 0.5f;
+    if (vr_teleport)
+    {
+        if (moveStick.data[1] > 0.7f && !teleportReady) teleportReady = true;
+        else if (moveStick.data[1] < 0.7f && teleportReady) { teleportReady = false; teleportTrigger = true; }
+    }
+    else
+    {
+        teleportReady = false;
+        teleportTrigger = false;
+    }
+    if (!vr_teleport) StickEdges(moveStick, KEY_PAD_LTHUMB_RIGHT, KEY_PAD_LTHUMB_LEFT,
                KEY_PAD_LTHUMB_DOWN, KEY_PAD_LTHUMB_UP, MovementUsesRight() ? previous.right.stick : previous.left.stick);
-    if (vr_snapTurn > 10.0f)
+    if (dominantGripModifier)
+    {
+        snapTurnLatched = false;
+        turnRate = 0.0f;
+    }
+    else if (vr_snapTurn > 10.0f)
     {
         const bool turnRight = turnStick.data[0] > 0.60f;
         const bool turnLeft = turnStick.data[0] < -0.60f;
@@ -399,6 +495,7 @@ void RT_OpenXRInputPoll()
         {
             const float deltaDegrees = (turnRight ? -1.0f : 1.0f) * vr_snapTurn;
             pendingViewYawDeltaDegrees -= deltaDegrees;
+            snapTurnOffsetDegrees += deltaDegrees;
             snapTurnLatched = true;
         }
         if (turnStick.data[0] < 0.40f && turnStick.data[0] > -0.40f) snapTurnLatched = false;
@@ -420,15 +517,15 @@ void RT_OpenXRInputPoll()
         turnRate += (targetRate - turnRate) * (1.0f - std::exp(-response * responseScale * dt));
         const float deltaDegrees = turnRate * dt;
         pendingViewYawDeltaDegrees -= deltaDegrees;
+        snapTurnOffsetDegrees += deltaDegrees;
         if (magnitude <= 0.05f) turnRate = 0.0f;
     }
-    const bool secondaryMappings = vr_secondary_button_mappings;
-    const int mainHand = MainHandIndex();
     const bool oldModifier = previousSecondaryButtonMappings && (mainHand == 0 ? previous.left.grip : previous.right.grip) > 0.5f;
     const bool newModifier = secondaryMappings && (mainHand == 0 ? current.left.grip : current.right.grip) > 0.5f;
     const int pointerHand = 1;
     const auto& pointer = current.right;
-    const bool pointerConsumesTrigger = menuactive != MENU_Off && menuactive != MENU_WaitKey && vr_menu_pointer && (vr_mouse_in_menu || pointer.grip > 0.5f);
+    const bool pointerEnabled = menuactive != MENU_Off && menuactive != MENU_WaitKey && vr_menu_pointer && (vr_mouse_in_menu || pointer.grip > 0.5f);
+    const bool pointerConsumesTrigger = menuactive != MENU_Off && menuactive != MENU_WaitKey && vr_menu_pointer && (pointerEnabled || pointerSuppressTriggerUntilRelease || pointerHeld);
 
     for (int hand = 0; hand < 2; ++hand)
     {
@@ -452,10 +549,19 @@ void RT_OpenXRInputPoll()
             RemappedEdge(old.grip > 0.5f, secondaryMappings ? false : now.grip > 0.5f,
                 false, false, gripKey, gripKey);
         }
+        else if (secondaryMappings)
+        {
+            // Match VR: offhand grip is a shifted DPAD_UP action only
+            // while the dominant grip is held and two-handed stabilization is off.
+            const bool oldGripCombo = old.grip > 0.5f && oldModifier && !vr_two_handed_weapons;
+            const bool newGripCombo = now.grip > 0.5f && newModifier && !vr_two_handed_weapons;
+            RemappedEdge(oldGripCombo, newGripCombo, false, false,
+                KEY_PAD_DPAD_UP, KEY_PAD_DPAD_UP);
+        }
         else
         {
             RemappedEdge(old.grip > 0.5f, now.grip > 0.5f,
-                previousSecondaryButtonMappings, secondaryMappings, gripKey, KEY_PAD_DPAD_UP);
+                false, false, gripKey, gripKey);
         }
         RemappedEdge(old.thumbClick, now.thumbClick, oldModifier, newModifier, thumbBase, thumbAlt);
         if (menuactive == MENU_WaitKey) Edge(hand == 0 ? KEY_PAD_LTHUMB : KEY_PAD_RTHUMB, now.thumbClick, old.thumbClick);
@@ -466,7 +572,11 @@ void RT_OpenXRInputPoll()
         RemappedEdge(oldFace1, nowFace1, oldModifier, newModifier, face1Base, face1Alt);
         RemappedEdge(oldFace2, nowFace2, oldModifier, newModifier, face2Base, face2Alt);
 
-        if (vr_joy_mode == 1)
+        // VR emits virtual stick-direction keys for both controllers while
+        // playing. In menus the right stick stays reserved for pointer input,
+        // except when the controls menu is capturing a binding.
+        const bool emitStickKeys = menuactive == MENU_Off || menuactive == MENU_WaitKey || hand == 0;
+        if (vr_joy_mode == 1 && emitStickKeys)
         {
             const int baseRight = hand == 0 ? KEY_JOYAXIS1PLUS : KEY_JOYAXIS3PLUS;
             const int baseLeft = hand == 0 ? KEY_JOYAXIS1MINUS : KEY_JOYAXIS3MINUS;
@@ -492,7 +602,9 @@ void RT_OpenXRInputPoll()
 
 bool RT_OpenXRInputAvailable() { return getSnapshot != nullptr; }
 bool RT_OpenXRInputIsActive() { return getSnapshot != nullptr && previous.sessionRunning && previous.focused; }
-void RT_OpenXRInputConfigure(const float d[4], const float sc[4], const EJoyAxis m[4], float sensitivity) { std::copy(d, d+4, configuredDead); std::copy(sc, sc+4, configuredScale); std::copy(m, m+4, configuredMap); configuredSensitivity=sensitivity; }
+void RT_OpenXRInputConfigure(const float d[4], const float sc[4], const EJoyAxis m[4], float sensitivity) { std::copy(d, d + 2, configuredDead); (void)sc; (void)m; (void)sensitivity; }
+void RT_OpenXRInputAddViewYawDeltaDegrees(float delta) { pendingViewYawDeltaDegrees += delta; }
+float RT_OpenXRInputGetSnapTurnOffsetDegrees() { return snapTurnOffsetDegrees; }
 float RT_OpenXRInputConsumeViewYawDeltaDegrees()
 {
     const float result = pendingViewYawDeltaDegrees;
@@ -505,6 +617,57 @@ bool RT_OpenXRInputGetHandPose(int hand, RT_OpenXRHandPose* outPose)
         return false;
     *outPose = handPoses[hand];
     return outPose->valid;
+}
+
+void RT_OpenXRInputAddRoomScaleDelta(float worldX, float worldY)
+{
+    if (!RT_OpenXRInputIsActive()) return;
+    pendingRoomScaleX += worldX;
+    pendingRoomScaleY += worldY;
+}
+
+void RT_OpenXRInputConsumeRoomScaleDelta(float* worldX, float* worldY)
+{
+    if (worldX == nullptr || worldY == nullptr) return;
+    *worldX = pendingRoomScaleX;
+    *worldY = pendingRoomScaleY;
+    pendingRoomScaleX = 0.0f;
+    pendingRoomScaleY = 0.0f;
+}
+
+void RT_OpenXRInputSetHeadHeightDelta(float worldZ)
+{
+    pendingHeadHeightDelta = worldZ;
+}
+
+float RT_OpenXRInputConsumeHeadHeightDelta()
+{
+    // Keep the latest pose value: render frames need not precede every tic.
+    return pendingHeadHeightDelta;
+}
+
+bool RT_OpenXRInputGetTeleportState(bool* aiming)
+{
+    if (aiming != nullptr) *aiming = vr_teleport && teleportReady;
+    const bool result = vr_teleport && teleportTrigger;
+    teleportTrigger = false;
+    return result;
+}
+
+void RT_OpenXRInputSetTeleportTarget(bool valid, float x, float y, float z)
+{
+    teleportTargetValid = valid;
+    teleportTarget[0] = x;
+    teleportTarget[1] = y;
+    teleportTarget[2] = z;
+}
+bool RT_OpenXRInputGetTeleportLocation(float* x, float* y, float* z)
+{
+    if (!teleportTargetValid || !vr_teleport || !teleportReady || x == nullptr || y == nullptr || z == nullptr) return false;
+    *x = teleportTarget[0];
+    *y = teleportTarget[1];
+    *z = teleportTarget[2];
+    return true;
 }
 
 void RT_OpenXRInputSetWorldHandPoses(const RT_OpenXRWorldHandPose (&poses)[2])
@@ -558,37 +721,47 @@ bool RT_OpenXRInputHaptic(int hand, float durationSeconds, float amplitude)
 
 void RT_OpenXRHapticWeaponFire()
 {
-    EmitHaptic(MainHandIndex(), 0.15f, 0.8f);
+    EmitHaptic(MainHandIndex(), 0.15f, ScaleHaptic(0.8f, (float)ext_haptic_level_fire_weapon));
+}
+
+void RT_OpenXRHapticWeaponFireHand(int hand)
+{
+    EmitHaptic(hand, 0.15f, ScaleHaptic(0.8f, (float)ext_haptic_level_fire_weapon));
+}
+
+void RT_OpenXRHapticMissileFire()
+{
+    EmitHaptic(MainHandIndex(), 0.15f, ScaleHaptic((float)vr_missile_haptic_level, (float)ext_haptic_level_fire_weapon));
 }
 
 void RT_OpenXRHapticDamage(float amplitude)
 {
-    EmitHaptic(0, 0.2f, amplitude);
-    EmitHaptic(1, 0.2f, amplitude);
+    EmitHaptic(0, 0.2f, ScaleHaptic(amplitude, (float)ext_haptic_level_damage_projectile));
+    EmitHaptic(1, 0.2f, ScaleHaptic(amplitude, (float)ext_haptic_level_damage_projectile));
 }
 
 void RT_OpenXRHapticPoison(float amplitude)
 {
-    EmitHaptic(0, 0.5f, amplitude);
-    EmitHaptic(1, 0.5f, amplitude);
+    EmitHaptic(0, 0.5f, ScaleHaptic(amplitude, (float)ext_haptic_level_poison));
+    EmitHaptic(1, 0.5f, ScaleHaptic(amplitude, (float)ext_haptic_level_poison));
 }
 
 void RT_OpenXRHapticHeal(float amplitude)
 {
-    EmitHaptic(0, 0.1f, amplitude);
-    EmitHaptic(1, 0.1f, amplitude);
+    EmitHaptic(0, 0.1f, ScaleHaptic(amplitude, (float)ext_haptic_level_healstation));
+    EmitHaptic(1, 0.1f, ScaleHaptic(amplitude, (float)ext_haptic_level_healstation));
 }
 
 void RT_OpenXRHapticPickup()
 {
-    EmitHaptic(0, 0.05f, vr_pickup_haptic_level);
-    EmitHaptic(1, 0.05f, vr_pickup_haptic_level);
+    EmitHaptic(0, 0.05f, ScaleHaptic((float)vr_pickup_haptic_level, (float)ext_haptic_level_pickup));
+    EmitHaptic(1, 0.05f, ScaleHaptic((float)vr_pickup_haptic_level, (float)ext_haptic_level_pickup));
 }
 
 void RT_OpenXRHapticQuake(float leftAmplitude, float rightAmplitude)
 {
-    EmitHaptic(0, 0.01f, leftAmplitude * vr_quake_haptic_level);
-    EmitHaptic(1, 0.01f, rightAmplitude * vr_quake_haptic_level);
+    EmitHaptic(0, 0.01f, ScaleHaptic(leftAmplitude * (float)vr_quake_haptic_level, (float)ext_haptic_level_rumble));
+    EmitHaptic(1, 0.01f, ScaleHaptic(rightAmplitude * (float)vr_quake_haptic_level, (float)ext_haptic_level_rumble));
 }
 CCMD(vr_pose_status)
 {

@@ -42,9 +42,7 @@ class Chainsaw : Weapon
 
 extend class StateProvider
 {
-// HAVE_RT begin: changed 'BulletPuff' to 'GibBulletPuff'
-	action void A_Saw(sound fullsound = "weapons/sawfull", sound hitsound = "weapons/sawhit", int damage = 2, class<Actor> pufftype = "GibBulletPuff", int flags = 0, double range = 0, double spread_xy = 2.8125, double spread_z = 0, double lifesteal = 0, int lifestealmax = 0, class<BasicArmorBonus> armorbonustype = "ArmorBonus")
-// HAVE_RT end
+	action void A_Saw(sound fullsound = "weapons/sawfull", sound hitsound = "weapons/sawhit", int damage = 2, class<Actor> pufftype = "BulletPuff", int flags = 0, double range = 0, double spread_xy = 2.8125, double spread_z = 0, double lifesteal = 0, int lifestealmax = 0, class<BasicArmorBonus> armorbonustype = "ArmorBonus")
 	{
 		FTranslatedLineTarget t;
 
@@ -55,9 +53,7 @@ extend class StateProvider
 
 		if (pufftype == null)
 		{
-// HAVE_RT begin: changed 'BulletPuff' to 'GibBulletPuff'
-			pufftype = 'GibBulletPuff';
-// HAVE_RT end
+			pufftype = 'BulletPuff';
 		}
 		if (damage == 0)
 		{
@@ -72,10 +68,12 @@ extend class StateProvider
 			range = MeleeRange + MELEEDELTA + (1. / 65536.); // MBF21 SAWRANGE;
 		}
 
+		Weapon weap = invoker == player.OffhandWeapon ? player.OffhandWeapon : player.ReadyWeapon;
+		int hand = weap != null && weap.bOffhandWeapon ? 1 : 0;
+		int alflags = hand ? ALF_ISOFFHAND : 0;
 		double ang = angle + spread_xy * (Random2[Saw]() / 255.);
-		double slope = AimLineAttack (ang, range, t) + spread_z * (Random2[Saw]() / 255.);
+		double slope = AimLineAttack (ang, range, t, flags: alflags) + spread_z * (Random2[Saw]() / 255.);
 
-		Weapon weap = player.ReadyWeapon;
 		if (weap != null && !(flags & SF_NOUSEAMMO) && !(!t.linetarget && (flags & SF_NOUSEAMMOMISS)) && !weap.bDehAmmo &&
 			invoker == weap && stateinfo != null && stateinfo.mStateType == STATE_Psprite)
 		{
@@ -84,6 +82,7 @@ extend class StateProvider
 		}
 
 		int puffFlags = (flags & SF_NORANDOMPUFFZ) ? LAF_NORANDOMPUFFZ : 0;
+		puffFlags |= hand ? LAF_ISOFFHAND : 0;
 
 		Actor puff;
 		int actualdamage;
@@ -166,6 +165,7 @@ extend class StateProvider
 				else
 					angle += 4.5;
 			}
+			player.resetDoomYaw = true;
 		}
 		if (!(flags & SF_NOPULLIN))
 			bJustAttacked = true;

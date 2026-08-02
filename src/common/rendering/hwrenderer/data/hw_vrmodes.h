@@ -1,3 +1,5 @@
+extern bool weaponStabilised;
+
 #pragma once
 
 #include "matrix.h"

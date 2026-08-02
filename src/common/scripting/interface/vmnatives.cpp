@@ -1278,6 +1278,7 @@ DEFINE_GLOBAL(AllServices)
 
 DEFINE_GLOBAL(Bindings)
 DEFINE_GLOBAL(AutomapBindings)
+DEFINE_GLOBAL(DoubleBindings)
 DEFINE_GLOBAL(generic_ui)
 
 DEFINE_FIELD(DStatusBarCore, RelTop);

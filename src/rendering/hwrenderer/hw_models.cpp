@@ -46,6 +46,8 @@
 
 CVAR(Bool, gl_light_models, true, CVAR_ARCHIVE)
 
+float gldepthmin, gldepthmax;
+
 VSMatrix FHWModelRenderer::GetViewToWorldMatrix()
 {
 	VSMatrix objectToWorldMatrix;
@@ -83,6 +85,9 @@ void FHWModelRenderer::BeginDrawHUDModel(FRenderStyle style, const VSMatrix &obj
 {
 	state.SetDepthFunc(DF_LEqual);
 	state.SetDepthClamp(true);
+	gldepthmin = 0;
+	gldepthmax = 1;
+	state.SetDepthRange(gldepthmin, gldepthmin + 0.3 * (gldepthmax - gldepthmin));
 
 	// [BB] In case the model should be rendered translucent, do back face culling.
 	// This solves a few of the problems caused by the lack of depth sorting.
@@ -104,6 +109,8 @@ void FHWModelRenderer::EndDrawHUDModel(FRenderStyle style, int smf_flags)
 	state.SetDepthFunc(DF_Less);
 	if (!(style == DefaultRenderStyle()) || (smf_flags & MDL_FORCECULLBACKFACES))
 		state.SetCulling(Cull_None);
+
+	state.SetDepthRange(gldepthmin, gldepthmax);
 }
 
 IModelVertexBuffer *FHWModelRenderer::CreateVertexBuffer(bool needindex, bool singleframe)

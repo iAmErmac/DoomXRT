@@ -16,7 +16,9 @@
 #endif
 #include "c_dispatch.h"
 #include "gamestate.h"
+#include "g_game.h"
 #include "hw_renderstate.h"
+#include "hw_vrmodes.h"
 #include "g_levellocals.h"
 #include "menustate.h"
 #include "r_utility.h"
@@ -73,12 +75,15 @@ HMODULE g_rt_dll = nullptr;
 #endif
 FRtState    rtstate = {};
 
+EXTERN_CVAR( Int, vr_mode )
 EXTERN_CVAR( Int, vr_overlayscreen )
 EXTERN_CVAR( Bool, vr_overlayscreen_always )
 EXTERN_CVAR( Float, vr_overlayscreen_size )
 EXTERN_CVAR( Float, vr_overlayscreen_dist )
 EXTERN_CVAR( Float, vr_overlayscreen_vpos )
 EXTERN_CVAR( Float, vr_hunits_per_meter )
+EXTERN_CVAR( Float, vr_vunits_per_meter )
+EXTERN_CVAR( Float, vr_height_adjust )
 EXTERN_CVAR( Float, vr_ipd )
 EXTERN_CVAR( Bool, vr_swap_eyes )
 EXTERN_CVAR( Float, vr_snapTurn )
@@ -139,7 +144,29 @@ bool g_rtOpenXRFrameStateValid = false;
 RgFloat3D g_rtOpenXRRecenterPosition{};
 RgQuaternion g_rtOpenXRRecenterOrientation{{ 0.0f, 0.0f, 0.0f, 1.0f }};
 bool g_rtOpenXRRecenterValid = false;
+RgFloat3D g_rtOpenXRLastHeadWorldPosition{};
+bool g_rtOpenXRLastHeadWorldPositionValid = false;
+float g_rtOpenXRPreviousHmdYaw = 0.0f;
+bool g_rtOpenXRPreviousHmdYawValid = false;
+RgFloat3D g_rtOpenXRTrackingUp{};
+RgFloat3D g_rtOpenXRTrackingRight{};
+RgFloat3D g_rtOpenXRTrackingForward{};
 }
+void RT_OpenXRResetRoomScaleTracking()
+{
+    // Preserve the VR yaw origin; only discard a positional sample that
+    // may have been captured while changing natural-crouch mode.
+    g_rtOpenXRLastHeadWorldPositionValid = false;
+    RT_OpenXRInputClearTrackingDeltas();
+}
+void RT_OpenXRResetTrackingOrigin()
+{
+    g_rtOpenXRRecenterValid = false;
+    g_rtOpenXRLastHeadWorldPositionValid = false;
+    g_rtOpenXRPreviousHmdYawValid = false;
+    RT_OpenXRInputClearTrackingDeltas();
+}
+
 namespace cvar
 {
     EXTERN_CVAR( Int, vr_rt_openxr_presentation )
@@ -1794,7 +1821,6 @@ private:
                 l_unit( irr[ 8 ] ), l_unit( irr[ 9 ] ), l_unit( irr[ 10 ] ), 0,
                 irr[ 12 ],          irr[ 13 ],          irr[ 14 ],           1,
             };
-
             auto skyTransform = mModelMatrix;
             skyTransform.scale( 1, cvar::rt_sky_stretch, 1 );
 
@@ -2107,7 +2133,7 @@ private:
             .isExportable =
                 rtstate.is< RtPrim::ExportMap >() || rtstate.is< RtPrim::ExportInstance >(),
             .animationTime        = 0.0f,
-            .localLightsIntensity = MapLightLevel( rtstate.m_lightlevel ),
+            .localLightsIntensity = rtstate.is< RtPrim::Wheel >() ? 0.0f : MapLightLevel( rtstate.m_lightlevel ),
         };
 
         auto makePrimFlags = [ this, &verts, forceLavaFloorTexture ]( bool isUI ) -> RgMeshPrimitiveFlags {
@@ -2129,7 +2155,7 @@ private:
             {
                 return RG_MESH_PRIMITIVE_SKY | RG_MESH_PRIMITIVE_TRANSLUCENT;
             }
-            if( rtstate.is< RtPrim::Particle >() )
+            if( rtstate.is< RtPrim::Particle >() || rtstate.is< RtPrim::LaserDot >() )
             {
                 return RG_MESH_PRIMITIVE_TRANSLUCENT;
             }
@@ -2184,13 +2210,13 @@ private:
             .color =
                 rtcolor_multiply( mStreamData.uObjectColor, mStreamData.uVertexColor, forcealpha1 ),
             .emissive =
-                forceLavaFloorTexture
+                forceLavaFloorTexture || rtstate.is< RtPrim::LaserBeam >() || rtstate.is< RtPrim::LaserDot >() || rtstate.is< RtPrim::Tracer >() || rtstate.is< RtPrim::TeleportMarker >()
                     ? 1.0f
                     : ( ( mRenderStyle.BlendOp == STYLEOP_Add &&
                           mRenderStyle.DestAlpha == STYLEALPHA_One )
                             ? cvar::rt_emis_additive_dflt
                             : 0.f ),
-            .classicLight = lightlevel_to_classic( isUI, mLightParms[ 3 ] ),
+            .classicLight = rtstate.is< RtPrim::Wheel >() ? 1.0f : lightlevel_to_classic( isUI, mLightParms[ 3 ] ),
         };
 
 #ifndef NDEBUG
@@ -2277,7 +2303,12 @@ public:
                 const float forwardZ = -1.0f + 2.0f * ( orientation.data[ 0 ] * orientation.data[ 0 ] + orientation.data[ 1 ] * orientation.data[ 1 ] );
                 const float yaw = std::atan2( forwardX, -forwardZ );
                 g_rtOpenXRRecenterPosition = g_rtOpenXRFrameState.headPose.position;
+                g_rtOpenXRTrackingUp = up;
+                g_rtOpenXRTrackingRight = right;
+                g_rtOpenXRTrackingForward = forward;
                 g_rtOpenXRRecenterOrientation = RgQuaternion{{ 0.0f, std::sin( yaw * 0.5f ), 0.0f, std::cos( yaw * 0.5f ) }};
+                g_rtOpenXRLastHeadWorldPositionValid = false;
+                RT_OpenXRInputClearTrackingDeltas();
                 g_rtOpenXRRecenterValid = true;
             }
 
@@ -2295,35 +2326,69 @@ public:
                 const auto rotated = quaternionMultiply( quaternionMultiply( q, qv ), inverse );
                 return RgFloat3D{{ rotated.data[ 0 ], rotated.data[ 1 ], rotated.data[ 2 ] }};
             };
-            const auto recenterInverse = RgQuaternion{{ -g_rtOpenXRRecenterOrientation.data[ 0 ], -g_rtOpenXRRecenterOrientation.data[ 1 ], -g_rtOpenXRRecenterOrientation.data[ 2 ], g_rtOpenXRRecenterOrientation.data[ 3 ] }};
+            const auto recenterInverse = RgQuaternion{{ -g_rtOpenXRRecenterOrientation.data[0], -g_rtOpenXRRecenterOrientation.data[1], -g_rtOpenXRRecenterOrientation.data[2], g_rtOpenXRRecenterOrientation.data[3] }};
             const auto headOrientation = quaternionMultiply( recenterInverse, g_rtOpenXRFrameState.headPose.orientation );
+            // VR feeds centred HMD yaw into gameplay yaw. RTGL owns the
+            // stereo head orientation, so apply its equivalent to locomotion
+            // input rather than rotating the camera/world a second time.
+            const float movementYaw = std::atan2(
+                -2.0f * (headOrientation.data[0] * headOrientation.data[2] + headOrientation.data[1] * headOrientation.data[3]),
+                1.0f - 2.0f * (headOrientation.data[0] * headOrientation.data[0] + headOrientation.data[1] * headOrientation.data[1]));
+// Queue VR's HMD yaw as a normal tic command. This turns the
+            // pawn (and therefore net-replicated player body) on the simulation
+            // tick rather than mutating view state from the render callback.
+            const float hmdYaw = -movementYaw;
+            const bool gameplayYawActive = gamestate == GS_LEVEL && menuactive == MENU_Off && !paused;
+            if (gameplayYawActive)
+            {
+                if (g_rtOpenXRPreviousHmdYawValid)
+                {
+                    float delta = hmdYaw - g_rtOpenXRPreviousHmdYaw;
+                    while (delta <= -float(M_PI)) delta += 2.0f * float(M_PI);
+                    while (delta > float(M_PI)) delta -= 2.0f * float(M_PI);
+                    RT_OpenXRInputAddViewYawDeltaDegrees(-delta * 180.0f / float(M_PI));
+                }
+                g_rtOpenXRPreviousHmdYaw = hmdYaw;
+                g_rtOpenXRPreviousHmdYawValid = true;
+            }
+            else
+            {
+                // VR discards the prior HMD sample while menus are active.
+                g_rtOpenXRPreviousHmdYawValid = false;
+            }
             const auto mapToWorld = [ & ]( const RgFloat3D& local ) {
                 return RgFloat3D{{
-                    right.data[ 0 ] * local.data[ 0 ] + up.data[ 0 ] * local.data[ 1 ] - forward.data[ 0 ] * local.data[ 2 ],
-                    right.data[ 1 ] * local.data[ 0 ] + up.data[ 1 ] * local.data[ 1 ] - forward.data[ 1 ] * local.data[ 2 ],
-                    right.data[ 2 ] * local.data[ 0 ] + up.data[ 2 ] * local.data[ 1 ] - forward.data[ 2 ] * local.data[ 2 ],
+                    g_rtOpenXRTrackingRight.data[ 0 ] * local.data[ 0 ] + g_rtOpenXRTrackingUp.data[ 0 ] * local.data[ 1 ] - g_rtOpenXRTrackingForward.data[ 0 ] * local.data[ 2 ],
+                    g_rtOpenXRTrackingRight.data[ 1 ] * local.data[ 0 ] + g_rtOpenXRTrackingUp.data[ 1 ] * local.data[ 1 ] - g_rtOpenXRTrackingForward.data[ 1 ] * local.data[ 2 ],
+                    g_rtOpenXRTrackingRight.data[ 2 ] * local.data[ 0 ] + g_rtOpenXRTrackingUp.data[ 2 ] * local.data[ 1 ] - g_rtOpenXRTrackingForward.data[ 2 ] * local.data[ 2 ],
                 }};
             };
+            // VR keeps snapTurn as a persistent yaw added to the HMD pose.
+            const float snapTurnRadians = RT_OpenXRInputGetSnapTurnOffsetDegrees() * float(M_PI / 180.0);
+            const RgQuaternion snapTurnOrientation{{ 0.0f, std::sin(snapTurnRadians * 0.5f), 0.0f, std::cos(snapTurnRadians * 0.5f) }};
             const auto mapTracking = [ & ]( const RgFloat3D& trackingVector ) {
-                return mapToWorld( quaternionRotate( recenterInverse, trackingVector ) );
+                return mapToWorld( quaternionRotate( snapTurnOrientation, quaternionRotate( recenterInverse, trackingVector ) ) );
             };
             RT_OpenXRWorldHandPose worldHands[2]{};
             for (int hand = 0; hand < 2; ++hand)
             {
                 RT_OpenXRHandPose rawHand;
                 if (!RT_OpenXRInputGetHandPose(hand, &rawHand)) continue;
+                // VR uses the controller offset from the current HMD pose, not the
+                // recenter origin. This keeps the weapon attached while room-scale motion
+                // moves the actor through the map.
                 const RgFloat3D relative{{
-                    rawHand.position.data[0] - g_rtOpenXRRecenterPosition.data[0],
-                    rawHand.position.data[1] - g_rtOpenXRRecenterPosition.data[1],
-                    rawHand.position.data[2] - g_rtOpenXRRecenterPosition.data[2],
+                    rawHand.position.data[0] - g_rtOpenXRFrameState.headPose.position.data[0],
+                    rawHand.position.data[1] - g_rtOpenXRFrameState.headPose.position.data[1],
+                    rawHand.position.data[2] - g_rtOpenXRFrameState.headPose.position.data[2],
                 }};
                 const RgFloat3D position = mapTracking(relative);
                 const RgFloat3D localForward = quaternionRotate(rawHand.orientation, RgFloat3D{{ 0.0f, 0.0f, -1.0f }});
                 const RgFloat3D localUp = quaternionRotate(rawHand.orientation, RgFloat3D{{ 0.0f, 1.0f, 0.0f }});
                 worldHands[hand].position = {{
-                    float(viewpoint.Pos.X) + position.data[0] * float(vr_hunits_per_meter),
-                    float(viewpoint.Pos.Y) + position.data[1] * float(vr_hunits_per_meter),
-                    float(viewpoint.Pos.Z) + position.data[2] * float(vr_hunits_per_meter),
+                    float(viewpoint.Pos.X) + position.data[0] * float(vr_vunits_per_meter),
+                    float(viewpoint.Pos.Y) + position.data[1] * float(vr_vunits_per_meter),
+                    float(viewpoint.Pos.Z) + position.data[2] * float(vr_vunits_per_meter) / std::max(pixelstretch, 0.001f),
                 }};
                 worldHands[hand].forward = mapTracking(localForward);
                 worldHands[hand].up = mapTracking(localUp);
@@ -2331,13 +2396,9 @@ public:
             }
             RT_OpenXRInputSetWorldHandPoses(worldHands);
             const float worldUnitsPerMeter = std::max( float( vr_hunits_per_meter ) * float( ONEGAMEUNIT_IN_METERS ), 0.001f );
-            const RgFloat3D headTranslation{{
-                (g_rtOpenXRFrameState.headPose.position.data[ 0 ] - g_rtOpenXRRecenterPosition.data[ 0 ]) * worldUnitsPerMeter,
-                (g_rtOpenXRFrameState.headPose.position.data[ 1 ] - g_rtOpenXRRecenterPosition.data[ 1 ]) * worldUnitsPerMeter,
-                (g_rtOpenXRFrameState.headPose.position.data[ 2 ] - g_rtOpenXRRecenterPosition.data[ 2 ]) * worldUnitsPerMeter,
-            }};
-            const RgFloat3D trackedRight = mapToWorld( quaternionRotate( headOrientation, RgFloat3D{{ 1.0f, 0.0f, 0.0f }} ) );
-            const RgFloat3D trackedUp = mapToWorld( quaternionRotate( headOrientation, RgFloat3D{{ 0.0f, 1.0f, 0.0f }} ) );
+            const auto displayOrientation = quaternionMultiply(snapTurnOrientation, headOrientation);
+            const RgFloat3D trackedRight = mapToWorld( quaternionRotate( displayOrientation, RgFloat3D{{ 1.0f, 0.0f, 0.0f }} ) );
+                        const RgFloat3D trackedUp = mapToWorld( quaternionRotate( displayOrientation, RgFloat3D{{ 0.0f, 1.0f, 0.0f }} ) );
 
             std::array< float, 16 > eyeProjections[ 2 ]{};
             auto stereo = RgStereoCameraInfoEXT{
@@ -2346,6 +2407,37 @@ public:
                 .left = info,
                 .right = info,
             };
+            const RgFloat3D rawHeadPosition = g_rtOpenXRFrameState.headPose.position;
+            // RTGL does not expose whether poses come from OpenXR stage or local
+            // space. Mirror VR's local-space anchor: the tracked height is
+            // relative to the level-start HMD position, never raw local-space Y.
+            const float hmdHeightDelta =
+                (rawHeadPosition.data[1] - g_rtOpenXRRecenterPosition.data[1]) *
+                float(vr_vunits_per_meter) / std::max(pixelstretch, 0.001f);
+            RT_OpenXRInputSetHeadHeightDelta(hmdHeightDelta);
+            if (!g_rtOpenXRLastHeadWorldPositionValid)
+            {
+                g_rtOpenXRLastHeadWorldPosition = rawHeadPosition;
+                g_rtOpenXRLastHeadWorldPositionValid = true;
+            }
+            else
+            {
+                // VR differences raw tracking positions before applying yaw.
+                // Applying yaw to an absolute position first makes a turn rotate an
+                // existing roomscale offset into a false movement/jump.
+                const RgFloat3D rawDelta{{
+                    rawHeadPosition.data[0] - g_rtOpenXRLastHeadWorldPosition.data[0],
+                    // VR roomscale uses only OpenXR horizontal x/z; never
+                    // feed physical crouch height into player XY locomotion.
+                    0.0f,
+                    rawHeadPosition.data[2] - g_rtOpenXRLastHeadWorldPosition.data[2],
+                }};
+                const RgFloat3D worldDelta = mapTracking(rawDelta);
+                RT_OpenXRInputAddRoomScaleDelta(
+                    worldDelta.data[0] * float(vr_vunits_per_meter),
+                    worldDelta.data[1] * float(vr_vunits_per_meter));
+                g_rtOpenXRLastHeadWorldPosition = rawHeadPosition;
+            }
             const auto makeEye = [ & ]( const RgOpenXREyeFrameStateEXT& eye, std::array< float, 16 >& projection ) {
                 const float eyeShiftMultiplier = std::clamp( float( vr_openxr_eye_shift_scale ), 0.0f, 4.0f );
                 const auto eyeOffset = RgFloat3D{{
@@ -2353,12 +2445,11 @@ public:
                     eye.pose.position.data[ 1 ] - g_rtOpenXRFrameState.headPose.position.data[ 1 ],
                     eye.pose.position.data[ 2 ] - g_rtOpenXRFrameState.headPose.position.data[ 2 ],
                 }};
-                const auto worldHeadTranslation = mapTracking( headTranslation );
                 const auto worldEyeOffset = mapTracking( eyeOffset );
                 auto result = info;
-                result.position.data[ 0 ] += worldHeadTranslation.data[ 0 ] + worldEyeOffset.data[ 0 ] * worldUnitsPerMeter * eyeShiftMultiplier;
-                result.position.data[ 1 ] += worldHeadTranslation.data[ 1 ] + worldEyeOffset.data[ 1 ] * worldUnitsPerMeter * eyeShiftMultiplier;
-                result.position.data[ 2 ] += worldHeadTranslation.data[ 2 ] + worldEyeOffset.data[ 2 ] * worldUnitsPerMeter * eyeShiftMultiplier;
+                result.position.data[ 0 ] += worldEyeOffset.data[ 0 ] * worldUnitsPerMeter * eyeShiftMultiplier;
+                result.position.data[ 1 ] += worldEyeOffset.data[ 1 ] * worldUnitsPerMeter * eyeShiftMultiplier;
+                result.position.data[ 2 ] += worldEyeOffset.data[ 2 ] * worldUnitsPerMeter * eyeShiftMultiplier;
                 result.right = trackedRight;
                 result.up = trackedUp;
                 std::memcpy( projection.data(), eye.projection, sizeof( eye.projection ) );
@@ -2373,6 +2464,7 @@ public:
                 g_rtOpenXRFrameState.requestedPresentationMode == RG_OPENXR_PRESENTATION_MODE_STEREO_PROJECTION_EXT &&
                 g_rtOpenXRFrameState.eyes[ 0 ].pose.valid && g_rtOpenXRFrameState.eyes[ 1 ].pose.valid )
             {
+                RG_CHECK( rt.rgUploadCamera( &stereo.left ) );
                 RG_CHECK( rt.rgUploadStereoCameraEXT( &stereo ) );
             }
         }
@@ -3812,7 +3904,7 @@ void RTFrameBuffer::RT_BeginFrame()
 #ifdef _WIN32
             PositionWindow( IsFullscreen() );
 #endif
-            g_rt_forcenofocuschange = false;
+            g_rt_forcenofocuschange = vr_mode != VR_OPENXR;
         }
         --g_rt_skipinitframes;
     }
@@ -3962,7 +4054,21 @@ void RTFrameBuffer::RT_BeginFrame()
         RG_CHECK( rt.rgGetOpenXRFrameStateEXT( &xrFrameState ) );
         g_rtOpenXRFrameState = xrFrameState;
         g_rtOpenXRFrameStateValid = xrFrameState.frameValid && xrFrameState.sessionRunning;
-        if( !g_rtOpenXRFrameStateValid || xrFrameState.requestedPresentationMode != RG_OPENXR_PRESENTATION_MODE_STEREO_PROJECTION_EXT ) g_rtOpenXRRecenterValid = false;
+// VR resets transient yaw/position samples while menus are active,
+        // but does not redefine the physical tracking origin. Recentring here
+        // would apply the pre-menu head turn a second time on return.
+        if( !g_rtOpenXRFrameStateValid )
+        {
+            g_rtOpenXRRecenterValid = false;
+            g_rtOpenXRLastHeadWorldPositionValid = false;
+            g_rtOpenXRPreviousHmdYawValid = false;
+        }
+        else if( xrFrameState.requestedPresentationMode != RG_OPENXR_PRESENTATION_MODE_STEREO_PROJECTION_EXT )
+        {
+            // Suppress a roomscale jump when stereo resumes, while retaining
+            // the yaw origin established for the current level.
+            g_rtOpenXRLastHeadWorldPositionValid = false;
+        }
 
         static uint32_t lastPresentationStatus = UINT32_MAX;
         const uint32_t presentationStatus = ( uint32_t( xrFrameState.requestedPresentationMode ) << 24 ) | ( uint32_t( xrFrameState.activePresentationMode ) << 16 ) | ( uint32_t( xrFrameState.requestedMirrorMode ) << 8 ) | uint32_t( xrFrameState.fallbackReason );

@@ -1,3 +1,5 @@
+#include "s_soundinternal.h"
+
 //-----------------------------------------------------------------------------
 //
 // Copyright 1993-1996 id Software
@@ -127,7 +129,7 @@ AActor *P_SpawnPlayerMissile (AActor *source, double x, double y, double z, PCla
 
 void P_CheckFakeFloorTriggers(AActor *mo, double oldz, bool oldz_has_viewheight = false);
 
-AActor *P_SpawnSubMissile (AActor *source, PClassActor *type, AActor *target);	// Strife uses it
+AActor *P_SpawnSubMissile (AActor *source, PClassActor *type, AActor *target, DAngle angle = nullAngle, int aimflags = 0);	// Strife uses it
 
 
 //
@@ -266,6 +268,7 @@ void	P_ApplyTorque(AActor *mo);
 bool	P_TeleportMove(AActor* thing, const DVector3 &pos, bool telefrag, bool modifyactor = true);	// [RH] Added z and telefrag parameters
 
 void	P_PlayerStartStomp (AActor *actor, bool mononly=false);		// [RH] Stomp on things for a newly spawned player
+void P_VRMove(AActor* mo, const DVector2& move);
 void	P_SlideMove (AActor* mo, const DVector2 &pos, int numsteps);
 bool	P_BounceWall (AActor *mo);
 bool	P_BounceActor (AActor *mo, AActor *BlockingMobj, bool ontop);
@@ -305,6 +308,7 @@ DAngle P_AimLineAttack(AActor *t1, DAngle angle, double distance, FTranslatedLin
 
 enum	// P_AimLineAttack flags
 {
+	ALF_ISOFFHAND = 256,
 	ALF_FORCENOSMART = 1,
 	ALF_CHECK3D = 2,
 	ALF_CHECKNONSHOOTABLE = 4,
@@ -324,6 +328,7 @@ enum	// P_LineAttack flags
 	LAF_TARGETISSOURCE= 1 << 4,
 	LAF_OVERRIDEZ =     1 << 5,
 	LAF_ABSOFFSET =     1 << 6,
+	LAF_ISOFFHAND   =   1 << 8,
 	LAF_ABSPOSITION =   1 << 7,
 };
 
@@ -342,6 +347,8 @@ enum	// P_LineTrace flags
 	TRF_ALLACTORS = 128,
 	TRF_SOLIDACTORS = 256,
 	TRF_BLOCKUSE = 512,
+	TRF_ISOFFHAND = 2048,
+	TRF_USEWEAPON = 4096,
 	TRF_BLOCKSELF = 1024,
 };
 
@@ -385,11 +392,13 @@ enum	// P_RailAttack / A_RailAttack / A_CustomRailgun / P_DrawRailTrail flags
 	RAF_EXPLICITANGLE = 4,
 	RAF_FULLBRIGHT = 8,
 	RAF_CENTERZ = 16,
+	RAF_ISOFFHAND = 64,
 	RAF_NORANDOMPUFFZ = 32,
 };
 
 
 bool	P_CheckMissileSpawn(AActor *missile, double maxdist);
+void	P_PlaySpawnSound(AActor *missile, AActor *spawner, int channel, EChanFlags flags);
 
 void	P_PlaySpawnSound(AActor *missile, AActor *spawner);
 

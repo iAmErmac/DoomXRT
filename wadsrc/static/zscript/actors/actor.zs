@@ -264,6 +264,17 @@ class Actor : Thinker native
 	private native int InventoryID;	// internal counter.
 	native uint freezetics;
 	native Vector2 AutomapOffsets;
+	 native readonly vector3 AttackPos;
+	 native readonly double AttackPitch;
+	 native readonly double AttackRoll;
+	 native readonly double AttackAngle;
+	 native readonly vector3 OffhandPos;
+	 native readonly double OffhandPitch;
+	 native readonly double OffhandRoll;
+	 native readonly double OffhandAngle;
+	 native readonly bool OverrideAttackPosDir;
+	 native vector3 AttackDir(Actor source, double yaw, double pitch);
+	 native vector3 OffhandDir(Actor source, double yaw, double pitch);
 	native double LandingSpeed;
 
 	meta String Obituary;		// Player was killed by this actor
@@ -758,8 +769,8 @@ class Actor : Thinker native
 	native Actor SpawnMissileZ (double z, Actor dest, class<Actor> type);
 	native Actor SpawnMissileAngleZSpeed (double z, class<Actor> type, double angle, double vz, double speed, Actor owner = null, bool checkspawn = true);
 	native Actor SpawnMissileZAimed (double z, Actor dest, Class<Actor> type);
-	native Actor SpawnSubMissile(Class<Actor> type, Actor target);
-	native Actor, Actor SpawnPlayerMissile(class<Actor> type, double angle = 1e37, double x = 0, double y = 0, double z = 0, out FTranslatedLineTarget pLineTarget = null, bool nofreeaim = false, bool noautoaim = false, int aimflags = 0);
+	native Actor SpawnSubMissile(Class<Actor> type, Actor target, int aimflags = 0, double angle = 1e37);
+	native Actor, Actor SpawnPlayerMissile(class<Actor> type, double angle = 1e37, double x = 0, double y = 0, double z = 0, out FTranslatedLineTarget pLineTarget = null, bool nofreeaim = false, bool noautoaim = false, int aimflags = 0, double pitch = 1e37);
 	native void SpawnTeleportFog(Vector3 pos, bool beforeTele, bool setTarget);
 	native Actor RoughMonsterSearch(int distance, bool onlyseekable = false, bool frontonly = false, double fov = 0);
 	native clearscope int ApplyDamageFactor(Name damagetype, int damage);

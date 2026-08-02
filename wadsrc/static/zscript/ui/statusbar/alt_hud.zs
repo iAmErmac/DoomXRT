@@ -469,6 +469,7 @@ class AltHud ui
 		Inventory inv;
 
 		let wi = CPlayer.ReadyWeapon;
+        let wi2 = CPlayer.OffhandWeapon;
 
 		orderedammos.Clear();
 
@@ -587,7 +588,7 @@ class AltHud ui
 		let ReadyWeapon = CPlayer.ReadyWeapon;
 		if (ReadyWeapon)
 		{
-			if (weapon == CPlayer.ReadyWeapon || SisterWeapon == CPlayer.ReadyWeapon) trans = 0.85;
+			if (weapon == CPlayer.ReadyWeapon || weapon == CPlayer.OffhandWeapon || SisterWeapon == CPlayer.ReadyWeapon || SisterWeapon == CPlayer.OffhandWeapon) trans = 0.85;
 		}
 
 		TextureID picnum = StatusBar.GetInventoryIcon(weapon, StatusBar.DI_ALTICONFIRST);

@@ -63,6 +63,13 @@
 #include "m_random.h"
 #include "doomdef.h"
 #include "p_local.h"
+#include "s_soundinternal.h"
+static DVector3 CanonicalAimDir(DAngle yaw, DAngle pitch)
+{
+	return DVector3(yaw.Cos() * pitch.Cos(), yaw.Sin() * pitch.Cos(), -pitch.Sin());
+}
+
+
 #include "common/rendering/hwrenderer/data/hw_vrmodes.h"
 #include "common/rendering/rt/rt_openxr_input.h"
 #include "p_maputl.h"
@@ -121,6 +128,9 @@ static void PlayerLandedOnThing (AActor *mo, AActor *onmobj);
 // EXTERNAL DATA DECLARATIONS ----------------------------------------------
 
 EXTERN_CVAR (Int,  cl_rockettrails)
+
+EXTERN_CVAR(Bool, use_action_spawn_yzoffset)
+EXTERN_CVAR(Int, vr_control_scheme)
 
 // PRIVATE DATA DEFINITIONS ------------------------------------------------
 
@@ -2547,6 +2557,11 @@ static double P_XYMovement (AActor *mo, DVector2 scroll)
 	return Oldfloorz;
 }
 
+
+void P_VRMove(AActor* mo, const DVector2& move)
+{
+    if (mo != nullptr) P_XYMovement(mo, move);
+}
 
 static void P_MonsterFallingDamage (AActor *mo)
 {
@@ -7097,6 +7112,11 @@ DEFINE_ACTION_FUNCTION(AActor, CheckMissileSpawn)
 
 void P_PlaySpawnSound(AActor *missile, AActor *spawner)
 {
+	P_PlaySpawnSound(missile, spawner, CHAN_WEAPON, CHANF_OVERLAP);
+}
+
+void P_PlaySpawnSound(AActor *missile, AActor *spawner, int channel, EChanFlags flags)
+{
 	if (missile->SeeSound != NO_SOUND)
 	{
 		if (!(missile->flags & MF_SPAWNSOUNDSOURCE))
@@ -7105,14 +7125,14 @@ void P_PlaySpawnSound(AActor *missile, AActor *spawner)
 		}
 		else if (spawner != NULL)
 		{
-			S_Sound (spawner, CHAN_WEAPON, 0, missile->SeeSound, 1, ATTN_NORM);
+			S_Sound (spawner, channel, flags, missile->SeeSound, 1, ATTN_NORM);
 		}
 		else
 		{
 			// If there is no spawner use the spawn position.
 			// But not in a silenced sector.
 			if (!(missile->Sector->Flags & SECF_SILENT))
-				S_Sound (missile->Level, missile->Pos(), CHAN_WEAPON, 0, missile->SeeSound, 1, ATTN_NORM);
+				S_Sound (missile->Level, missile->Pos(), channel, flags, missile->SeeSound, 1, ATTN_NORM);
 		}
 	}
 }
@@ -7391,17 +7411,31 @@ DEFINE_ACTION_FUNCTION(AActor, SpawnMissileAngleZSpeed)
 }
 
 
-AActor *P_SpawnSubMissile(AActor *source, PClassActor *type, AActor *target)
+AActor *P_SpawnSubMissile(AActor *source, PClassActor *type, AActor *target, DAngle angle, int aimflags)
 {
-	AActor *other = Spawn(source->Level, type, source->Pos(), ALLOW_REPLACE);
-
 	if (source == nullptr || type == nullptr)
 	{
 		return nullptr;
 	}
 
+	DVector3 spawnpos = source->Pos();
+	DAngle spawnangle = angle;
+	DAngle spawnpitch = source->Angles.Pitch;
+	if (source->player != nullptr && source->player->mo->OverrideAttackPosDir)
+	{
+		const bool offhand = (aimflags & ALF_ISOFFHAND) != 0 && !multiplayer;
+		spawnpos = offhand ? source->player->mo->OffhandPos : source->player->mo->AttackPos;
+		const DAngle poseYaw = offhand ? source->player->mo->OffhandAngle : source->player->mo->AttackAngle;
+		const DAngle posePitch = offhand ? source->player->mo->OffhandPitch : source->player->mo->AttackPitch;
+		const DVector3 dir = CanonicalAimDir(poseYaw, posePitch);
+		spawnangle = dir.Angle();
+		spawnpitch = dir.Pitch();
+	}
+	AActor *other = Spawn(source->Level, type, spawnpos, ALLOW_REPLACE);
+	if (other == nullptr) return nullptr;
+
 	other->target = target;
-	other->Angles.Yaw = source->Angles.Yaw;
+	other->Angles.Yaw = spawnangle;
 	other->VelFromAngle();
 
 	if (other->flags4 & MF4_SPECTRAL)
@@ -7418,8 +7452,8 @@ AActor *P_SpawnSubMissile(AActor *source, PClassActor *type, AActor *target)
 
 	if (P_CheckMissileSpawn(other, source->radius))
 	{
-		DAngle pitch = P_AimLineAttack(source, source->Angles.Yaw, 1024.);
-		other->Vel.Z = -other->Speed * pitch.Sin();
+		if (source->player == nullptr || multiplayer || !source->player->mo->OverrideAttackPosDir) spawnpitch = P_AimLineAttack(source, spawnangle, 1024., nullptr, nullAngle, aimflags);
+		other->Vel.Z = -other->Speed * spawnpitch.Sin();
 		return other;
 	}
 	return NULL;
@@ -7430,7 +7464,10 @@ DEFINE_ACTION_FUNCTION(AActor, SpawnSubMissile)
 	PARAM_SELF_PROLOGUE(AActor);
 	PARAM_CLASS(cls, AActor);
 	PARAM_OBJECT_NOT_NULL(target, AActor);
-	ACTION_RETURN_OBJECT(P_SpawnSubMissile(self, cls, target));
+	PARAM_INT(aimflags);
+	PARAM_ANGLE(angle);
+	if (angle == DAngle::fromDeg(1e37)) angle = self->Angles.Yaw;
+	ACTION_RETURN_OBJECT(P_SpawnSubMissile(self, cls, target, angle, aimflags));
 }
 /*
 ================
@@ -7518,9 +7555,23 @@ AActor *P_SpawnPlayerMissile (AActor *source, double x, double y, double z,
 		}
 	}
 	DVector3 pos = trackedWeaponAim ? trackedOrigin : source->Vec2OffsetZ(x, y, z);
+	if (source->player != nullptr && source->player->mo->OverrideAttackPosDir)
+	{
+		const bool offhand = (aimflags & ALF_ISOFFHAND) != 0 && !multiplayer;
+		pos = offhand ? source->player->mo->OffhandPos : source->player->mo->AttackPos;
+		const DAngle poseYaw = offhand ? source->player->mo->OffhandAngle : source->player->mo->AttackAngle;
+		const DAngle posePitch = offhand ? source->player->mo->OffhandPitch : source->player->mo->AttackPitch;
+		const DVector3 dir = CanonicalAimDir(poseYaw, posePitch);
+		an = dir.Angle();
+		 pitch = dir.Pitch();
+		if (!use_action_spawn_yzoffset && !multiplayer) y = z = 0;
+		pos += x * CanonicalAimDir(poseYaw, posePitch);
+		pos += y * CanonicalAimDir(poseYaw - DAngle::fromDeg(90.), posePitch);
+		pos += z * CanonicalAimDir(poseYaw, posePitch + DAngle::fromDeg(90.));
+	}
 	AActor *MissileActor = Spawn (source->Level, type, pos, ALLOW_REPLACE);
 	if (pMissileActor) *pMissileActor = MissileActor;
-	P_PlaySpawnSound(MissileActor, source);
+	P_PlaySpawnSound(MissileActor, source, (aimflags & ALF_ISOFFHAND) ? CHAN_OFFWEAPON : CHAN_WEAPON, CHANF_OVERLAP);
 	MissileActor->target = source;
 	MissileActor->Angles.Yaw = an;
 	if (MissileActor->flags3 & (MF3_FLOORHUGGER | MF3_CEILINGHUGGER))
@@ -7541,7 +7592,7 @@ AActor *P_SpawnPlayerMissile (AActor *source, double x, double y, double z,
 		if ((MissileActor->DamageFunc != nullptr || MissileActor->DamageType != NAME_None || MissileActor->SeeSound != NO_SOUND) &&
 			source->player == source->Level->GetConsolePlayer())
 		{
-			RT_OpenXRHapticWeaponFire();
+			if ((aimflags & ALF_ISOFFHAND) != 0) RT_OpenXRHapticWeaponFireHand(vr_control_scheme < 10 ? 0 : 1); else RT_OpenXRHapticWeaponFire();
 		}
 		return MissileActor;
 	}

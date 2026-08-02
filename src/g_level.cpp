@@ -36,6 +36,9 @@
 
 #include "d_main.h"
 #include "g_level.h"
+#if HAVE_RT
+#include "common/rendering/rt/rt_openxr_input.h"
+#endif
 #include "g_game.h"
 #include "s_sound.h"
 #include "d_event.h"
@@ -563,6 +566,9 @@ static void InitPlayerClasses ()
 
 void G_InitNew (const char *mapname, bool bTitleLevel)
 {
+#if HAVE_RT
+	RT_OpenXRInputReset();
+#endif
 #if HAVE_RT
 	extern void RT_OnLevelLoad( const char* );
 	RT_OnLevelLoad( mapname );

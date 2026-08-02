@@ -85,6 +85,15 @@ static FRandom pr_burst ("Burst");
 static FRandom pr_monsterrefire ("MonsterRefire");
 static FRandom pr_teleport("A_Teleport");
 static FRandom pr_bfgselfdamage("BFGSelfDamage");
+CVAR(Float, ext_haptic_level_global_intensity, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, ext_haptic_level_damage_projectile, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, ext_haptic_level_pickup_weapon, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, ext_haptic_level_pickup, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, ext_haptic_level_fire_weapon, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, ext_haptic_level_poison, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, ext_haptic_level_healstation, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, ext_haptic_level_heartbeat, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR(Float, ext_haptic_level_rumble, 1.0f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, vr_recoil, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 	   FRandom pr_cajump("CustomJump");
 
@@ -1273,11 +1282,17 @@ DEFINE_ACTION_FUNCTION(AActor, A_Recoil)
 {
 	PARAM_SELF_PROLOGUE(AActor);
 	PARAM_FLOAT(xyvel);
+	player_t *player = self->player;
+	if (player != nullptr && player->mo == self)
+	{
+		if (multiplayer || !vr_recoil) return 0;
+		player->keepmomentum = true;
+	}
+
 
 	self->Thrust(self->Angles.Yaw + DAngle::fromDeg(180.), xyvel);
 	return 0;
 }
-
 
 ///===========================================================================
 //
@@ -5619,4 +5634,28 @@ DEFINE_ACTION_FUNCTION(AActor, GetRenderStyle)
 		if (self->RenderStyle == LegacyRenderStyles[i]) ACTION_RETURN_INT(i);
 	}
 	ACTION_RETURN_INT(-1);	// no symbolic constant exists to handle this style.
+}
+
+DEFINE_ACTION_FUNCTION(AActor, AttackDir)
+{
+	PARAM_SELF_PROLOGUE(AActor);
+	PARAM_OBJECT_NOT_NULL(source, AActor);
+	PARAM_ANGLE(yaw);
+	PARAM_ANGLE(pitch);
+	if (self->player != nullptr && multiplayer && self->OverrideAttackPosDir)
+		ACTION_RETURN_VEC3(DVector3((self->AttackAngle + DAngle::fromDeg(90.)).Degrees(), (-self->AttackPitch).Degrees(), 0.));
+	DVector3 dir = self->AttackDir(source, yaw, pitch);
+	ACTION_RETURN_VEC3(DVector3(dir.Angle().Degrees(), dir.Pitch().Degrees(), 0.));
+}
+
+DEFINE_ACTION_FUNCTION(AActor, OffhandDir)
+{
+	PARAM_SELF_PROLOGUE(AActor);
+	PARAM_OBJECT_NOT_NULL(source, AActor);
+	PARAM_ANGLE(yaw);
+	PARAM_ANGLE(pitch);
+	if (self->player != nullptr && multiplayer && self->OverrideAttackPosDir)
+		ACTION_RETURN_VEC3(DVector3((self->AttackAngle + DAngle::fromDeg(90.)).Degrees(), (-self->AttackPitch).Degrees(), 0.));
+	DVector3 dir = self->OffhandDir(source, yaw, pitch);
+	ACTION_RETURN_VEC3(DVector3(dir.Angle().Degrees(), dir.Pitch().Degrees(), 0.));
 }

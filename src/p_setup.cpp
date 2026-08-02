@@ -663,6 +663,12 @@ void P_SetupLevel(FLevelLocals *Level, int position, bool newGame)
 		AnnounceGameStart();
 	}
 
+#if HAVE_RT
+	// Reset transient VR yaw after level setup, outside menu/loading frames.
+	extern void RT_OpenXRResetTrackingOrigin();
+	RT_OpenXRResetTrackingOrigin();
+#endif
+
 	// This check was previously done at run time each time the heightsec was checked.
 	// However, since 3D floors are static data, we can easily precalculate this and store it in the sector's flags for quick access.
 	for (auto &s : Level->sectors)

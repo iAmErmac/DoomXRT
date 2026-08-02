@@ -61,6 +61,7 @@
 
 #include "doomdef.h"
 #include "d_event.h"
+#include "common/rendering/hwrenderer/data/hw_vrmodes.h"
 #include "p_local.h"
 #include "doomstat.h"
 #include "s_sound.h"
@@ -96,6 +97,141 @@
 #include "d_main.h"
 
 static FRandom pr_skullpop ("SkullPop");
+static DVector3 CanonicalPoseDirection(AActor* actor, bool offhand)
+{
+	if (actor == nullptr || actor->player == nullptr) return DVector3(0, 0, 0);
+	const DAngle yaw = offhand ? actor->player->mo->OffhandAngle : actor->player->mo->AttackAngle;
+	const DAngle pitch = offhand ? actor->player->mo->OffhandPitch : actor->player->mo->AttackPitch;
+	const double pc = pitch.Cos();
+	return { pc * yaw.Cos(), pc * yaw.Sin(), -pitch.Sin() };
+}
+
+static DVector3 MapWeaponDir(AActor* actor, DAngle yaw, DAngle pitch, int hand)
+{
+	const double pc = pitch.Cos();
+	DVector3 fallback = { pc * yaw.Cos(), pc * yaw.Sin(), -pitch.Sin() };
+	if (actor == nullptr || actor->player == nullptr || multiplayer) return fallback;
+	const VRMode* vrMode = VRMode::GetVRModeCached(true);
+	if (vrMode == nullptr) return fallback;
+	VSMatrix transform;
+	if (!vrMode->GetWeaponTransform(&transform, hand)) return fallback;
+	const FLOATTYPE* mat = transform.get();
+	yaw -= actor->Angles.Yaw;
+	pitch -= actor->Angles.Pitch;
+	const double localX = pitch.Cos() * yaw.Cos();
+	const double localY = pitch.Cos() * yaw.Sin();
+	const double localZ = -pitch.Sin();
+	DVector3 dir = { localX * -mat[8] + localY * -mat[0] + localZ * -mat[4], localX * -mat[10] + localY * -mat[2] + localZ * -mat[6], localX * -mat[9] + localY * -mat[1] + localZ * -mat[5] };
+	dir.MakeUnit();
+	return dir;
+}
+
+static DVector3 MapAttackDir(AActor* actor, DAngle yaw, DAngle pitch)
+{
+	return MapWeaponDir(actor, yaw, pitch, 0);
+}
+
+static DVector3 MapOffhandDir(AActor* actor, DAngle yaw, DAngle pitch)
+{
+	return MapWeaponDir(actor, yaw, pitch, 1);
+}
+
+static void UpdateCanonicalMainHandPose(player_t *player)
+{
+		if (player == nullptr || player->mo == nullptr)
+		{
+			return;
+		}
+
+		player->mo->AttackDir = MapAttackDir;
+		player->mo->OffhandDir = MapOffhandDir;
+
+	const VRMode* vrMode = VRMode::GetVRModeCached(true);
+	const bool isLocalVr = !multiplayer && vrMode != nullptr && vrMode->IsVR();
+	if (multiplayer)
+	{
+		player->mo->OverrideAttackPosDir = true;
+	}
+	else
+	{
+		player->mo->OverrideAttackPosDir = isLocalVr;
+	}
+
+	if (!player->mo->OverrideAttackPosDir)
+	{
+		return;
+	}
+
+	bool seededMainHandFromController = false;
+	bool seededMainHandDirection = false;
+	bool seededOffhandDirection = false;
+	if (isLocalVr)
+	{
+		VSMatrix attackTransform;
+		if (vrMode->GetWeaponTransform(&attackTransform, VR_MAINHAND))
+		{
+			const FLOATTYPE* attackMatrix = attackTransform.get();
+			player->mo->AttackPos.X = attackMatrix[12];
+			player->mo->AttackPos.Y = attackMatrix[14];
+			player->mo->AttackPos.Z = attackMatrix[13];
+			seededMainHandFromController = true;
+			DVector3 direction(-attackMatrix[8], -attackMatrix[9], -attackMatrix[10]);
+			if (direction.LengthSquared() > 0.000001)
+			{
+				direction.MakeUnit();
+				player->mo->AttackAngle = direction.Angle();
+				player->mo->AttackPitch = direction.Pitch();
+				seededMainHandDirection = true;
+			}
+		}
+
+		VSMatrix offhandTransform;
+		if (vrMode->GetWeaponTransform(&offhandTransform, VR_OFFHAND))
+		{
+			const FLOATTYPE* offhandMatrix = offhandTransform.get();
+			player->mo->OffhandPos.X = offhandMatrix[12];
+			player->mo->OffhandPos.Y = offhandMatrix[14];
+			player->mo->OffhandPos.Z = offhandMatrix[13];
+			DVector3 direction(-offhandMatrix[8], -offhandMatrix[9], -offhandMatrix[10]);
+			if (direction.LengthSquared() > 0.000001)
+			{
+				direction.MakeUnit();
+				player->mo->OffhandAngle = direction.Angle();
+				player->mo->OffhandPitch = direction.Pitch();
+				seededOffhandDirection = true;
+			}
+		}
+	}
+
+	if (!seededMainHandFromController)
+	{
+		const double shootz = player->mo->Center() - player->mo->Floorclip + player->mo->AttackOffset();
+		player->mo->AttackPos = player->mo->PosAtZ(shootz);
+	}
+	if (!seededMainHandDirection)
+	{
+		player->mo->AttackPitch = player->mo->Angles.Pitch;
+		player->mo->AttackAngle = player->mo->Angles.Yaw;
+	}
+	player->mo->AttackRoll = nullAngle;
+	if (!seededOffhandDirection)
+	{
+		player->mo->OffhandPitch = player->mo->AttackPitch;
+		player->mo->OffhandAngle = player->mo->AttackAngle;
+	}
+
+	// Multiplayer fake-6DoF uses a single canonical weapon aim. Mirror that
+	// pose into the offhand fields too so any offhand code path that still
+	// consults them remains deterministic across peers.
+	if (multiplayer)
+	{
+		player->mo->OffhandPos = player->mo->AttackPos;
+		player->mo->OffhandPitch = player->mo->AttackPitch;
+		player->mo->OffhandAngle = player->mo->AttackAngle;
+		player->mo->OffhandRoll = player->mo->AttackRoll;
+	}
+}
+
 
 // [SP] Allows respawn in single player
 CVAR(Bool, sv_singleplayerrespawn, false, CVAR_SERVERINFO | CVAR_CHEAT)
@@ -292,6 +428,7 @@ void player_t::CopyFrom(player_t &p, bool copyPSP)
 	Vel = p.Vel;
 	centering = p.centering;
 	turnticks = p.turnticks;
+	ohattackdown = p.ohattackdown;
 	attackdown = p.attackdown;
 	usedown = p.usedown;
 	oldbuttons = p.oldbuttons;
@@ -305,6 +442,7 @@ void player_t::CopyFrom(player_t &p, bool copyPSP)
 	spreecount = p.spreecount;
 	WeaponState = p.WeaponState;
 	ReadyWeapon = p.ReadyWeapon;
+	OffhandWeapon = p.OffhandWeapon;
 	PendingWeapon = p.PendingWeapon;
 	cheats = p.cheats;
 	timefreezer = p.timefreezer;
@@ -378,10 +516,12 @@ size_t player_t::PropagateMark()
 	GC::Mark(attacker);
 	GC::Mark(camera);
 	GC::Mark(Bot);
+	GC::Mark(OffhandWeapon);
 	GC::Mark(ReadyWeapon);
 	GC::Mark(ConversationNPC);
 	GC::Mark(ConversationPC);
 	GC::Mark(MUSINFOactor);
+	GC::Mark(PremorphWeaponOffhand);
 	GC::Mark(PremorphWeapon);
 	GC::Mark(psprites);
 	if (PendingWeapon != WP_NOCHANGE)
@@ -1269,6 +1409,7 @@ DEFINE_ACTION_FUNCTION(APlayerPawn, CheckUse)
 
 void P_PlayerThink (player_t *player)
 {
+	UpdateCanonicalMainHandPose(player);
 	ticcmd_t *cmd = &player->cmd;
 
 	if (player->mo == NULL)
@@ -1728,6 +1869,7 @@ void player_t::Serialize(FSerializer &arc)
 		("spreecount", spreecount)
 		("multicount", multicount)
 		("lastkilltime", lastkilltime)
+		("offhandweapon", OffhandWeapon)
 		("readyweapon", ReadyWeapon)
 		("pendingweapon", PendingWeapon)
 		("cheats", cheats)
@@ -1749,6 +1891,7 @@ void player_t::Serialize(FSerializer &arc)
 		("morphedplayerclass", MorphedPlayerClass)
 		("morphstyle", MorphStyle)
 		("morphexitflash", MorphExitFlash)
+		("premorphweaponoffhand", PremorphWeaponOffhand)
 		("premorphweapon", PremorphWeapon)
 		("chickenpeck", chickenPeck)
 		("jumptics", jumpTics)
@@ -1831,8 +1974,10 @@ DEFINE_FIELD_X(PlayerInfo, player_t, deltaviewheight)
 DEFINE_FIELD_X(PlayerInfo, player_t, bob)
 DEFINE_FIELD_X(PlayerInfo, player_t, Vel)
 DEFINE_FIELD_X(PlayerInfo, player_t, centering)
+DEFINE_FIELD_X(PlayerInfo, player_t, resetDoomYaw)
 DEFINE_FIELD_X(PlayerInfo, player_t, turnticks)
 DEFINE_FIELD_X(PlayerInfo, player_t, PlayInVR)
+DEFINE_FIELD_X(PlayerInfo, player_t, ohattackdown)
 DEFINE_FIELD_X(PlayerInfo, player_t, attackdown)
 DEFINE_FIELD_X(PlayerInfo, player_t, usedown)
 DEFINE_FIELD_X(PlayerInfo, player_t, oldbuttons)
@@ -1845,6 +1990,7 @@ DEFINE_FIELD_X(PlayerInfo, player_t, lastkilltime)
 DEFINE_FIELD_X(PlayerInfo, player_t, multicount)
 DEFINE_FIELD_X(PlayerInfo, player_t, spreecount)
 DEFINE_FIELD_X(PlayerInfo, player_t, WeaponState)
+DEFINE_FIELD_X(PlayerInfo, player_t, OffhandWeapon)
 DEFINE_FIELD_X(PlayerInfo, player_t, ReadyWeapon)
 DEFINE_FIELD_X(PlayerInfo, player_t, PendingWeapon)
 DEFINE_FIELD_X(PlayerInfo, player_t, psprites)
@@ -1873,6 +2019,7 @@ DEFINE_FIELD_X(PlayerInfo, player_t, morphTics)
 DEFINE_FIELD_X(PlayerInfo, player_t, MorphedPlayerClass)
 DEFINE_FIELD_X(PlayerInfo, player_t, MorphStyle)
 DEFINE_FIELD_X(PlayerInfo, player_t, MorphExitFlash)
+DEFINE_FIELD_X(PlayerInfo, player_t, PremorphWeaponOffhand)
 DEFINE_FIELD_X(PlayerInfo, player_t, PremorphWeapon)
 DEFINE_FIELD_X(PlayerInfo, player_t, chickenPeck)
 DEFINE_FIELD_X(PlayerInfo, player_t, jumpTics)

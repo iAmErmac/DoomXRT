@@ -246,7 +246,7 @@ void VkPostprocess::DrawPresentTexture(const IntRect &box, bool applyGamma, bool
 	renderstate.Draw();
 }
 
-void VkPostprocess::DrawPresentTextureToImage(VkTextureImage *image, VkFormat outputFormat, const IntRect &box, bool applyGamma, bool screenshot, VkImageLayout finalLayout)
+void VkPostprocess::DrawPresentTextureToImage(VkTextureImage *image, VkFormat outputFormat, const IntRect &box, bool applyGamma, bool screenshot, bool fullSource, VkImageLayout finalLayout)
 {
 	VkPPRenderState renderstate(fb);
 	const bool outputIsSrgb = outputFormat == VK_FORMAT_B8G8R8A8_SRGB || outputFormat == VK_FORMAT_R8G8B8A8_SRGB;
@@ -274,7 +274,12 @@ void VkPostprocess::DrawPresentTextureToImage(VkTextureImage *image, VkFormat ou
 	}
 	uniforms.ColorScale = (gl_dither_bpc == -1) ? 255.0f : (float)((1 << gl_dither_bpc) - 1);
 
-	if (screenshot)
+	if (fullSource)
+	{
+		uniforms.Scale = { 1.0f, -1.0f };
+		uniforms.Offset = { 0.0f, 1.0f };
+	}
+	else if (screenshot)
 	{
 		uniforms.Scale = { screen->mScreenViewport.width / (float)fb->GetBuffers()->GetWidth(), screen->mScreenViewport.height / (float)fb->GetBuffers()->GetHeight() };
 		uniforms.Offset = { 0.0f, 0.0f };

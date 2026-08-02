@@ -41,6 +41,20 @@ class PunchDagger : StrifeWeapon
 	{
 		FTranslatedLineTarget t;
 		int damage;
+
+		if (player == null)
+		{
+			return;
+		}
+
+		int alflags = 0;
+		int laflags = LAF_ISMELEEATTACK;
+		Weapon weapon = invoker == player.OffhandWeapon ? player.OffhandWeapon : player.ReadyWeapon;
+		if (weapon != null && weapon.bOffhandWeapon)
+		{
+			alflags |= ALF_ISOFFHAND;
+			laflags |= LAF_ISOFFHAND;
+		}
 		
 		if (FindInventory("SVETalismanPowerup"))
 		{
@@ -57,17 +71,18 @@ class PunchDagger : StrifeWeapon
 			}
 		}
 
-		double angle = angle + random2[JabDagger]() * (5.625 / 256);
-		double pitch = AimLineAttack (angle, 80.);
-		LineAttack (angle, 80., pitch, damage, 'Melee', "StrifeSpark", true, t);
+		double ang = angle + random2[JabDagger]() * (5.625 / 256);
+		double pitch = AimLineAttack (ang, 80., flags: alflags);
+		LineAttack (ang, 80., pitch, damage, 'Melee', "StrifeSpark", laflags, t);
 
 		// turn to face target
-		if (t.linetarget)
+		if ((!player.PlayInVR || (!multiplayer && vanilla_melee_attack)) && t.linetarget)
 		{
 			A_StartSound (t.linetarget.bNoBlood ? sound("misc/metalhit") : sound("misc/meathit"), CHAN_WEAPON);
 			angle = t.angleFromSource;
 			bJustAttacked = true;
 			t.linetarget.DaggerAlert (self);
+			player.resetDoomYaw = true;
 		}
 		else
 		{

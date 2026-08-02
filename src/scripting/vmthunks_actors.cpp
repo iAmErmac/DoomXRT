@@ -100,8 +100,6 @@ DEFINE_ACTION_FUNCTION_NATIVE(_FCheckPosition, ClearLastRipped, ClearLastRipped)
 	return 0;
 }
 
-
-
 DEFINE_ACTION_FUNCTION_NATIVE(DObject, SetMusicVolume, I_SetMusicVolume)
 {
 	PARAM_PROLOGUE;
@@ -123,7 +121,6 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, GetPointer, COPY_AAPTR)
 	ACTION_RETURN_OBJECT(COPY_AAPTR(self, ptr));
 }
 
-
 //==========================================================================
 //
 // Custom sound functions.
@@ -137,16 +134,22 @@ static void NativeStopSound(AActor *actor, int slot)
 
 DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_StopSound, NativeStopSound)
 {
-	PARAM_SELF_PROLOGUE(AActor);
+	PARAM_ACTION_PROLOGUE(AActor);
 	PARAM_INT(slot);
-	
+	if (ACTION_CALL_FROM_PSPRITE())
+	{
+		DPSprite *pspr = self->player->FindPSprite(stateinfo->mPSPIndex);
+		if (pspr != nullptr && pspr->GetID() == PSP_OFFHANDWEAPON && slot == CHAN_WEAPON)
+			slot = CHAN_OFFWEAPON;
+	}
+
 	S_StopSound(self, slot);
 	return 0;
 }
 
 DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_StopSounds, S_StopActorSounds)
 {
-	PARAM_SELF_PROLOGUE(AActor);
+	PARAM_ACTION_PROLOGUE(AActor);
 	PARAM_INT(chanmin);
 	PARAM_INT(chanmax);
 	S_StopActorSounds(self, chanmin, chanmax);
@@ -155,8 +158,17 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_StopSounds, S_StopActorSounds)
 
 DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_SoundPitch, S_ChangeActorSoundPitch)
 {
-	PARAM_SELF_PROLOGUE(AActor);
+	PARAM_ACTION_PROLOGUE(AActor);
+
 	PARAM_INT(channel);
+
+	if (ACTION_CALL_FROM_PSPRITE())
+	{
+		DPSprite *pspr = self->player->FindPSprite(stateinfo->mPSPIndex);
+		if (pspr != nullptr && pspr->GetID() == PSP_OFFHANDWEAPON && channel == CHAN_WEAPON)
+			channel = CHAN_OFFWEAPON;
+	}
+
 	PARAM_FLOAT(pitch);
 	S_ChangeActorSoundPitch(self, channel, pitch);
 	return 0;
@@ -164,8 +176,17 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_SoundPitch, S_ChangeActorSoundPitch)
 
 DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_SoundVolume, S_ChangeActorSoundVolume)
 {
-	PARAM_SELF_PROLOGUE(AActor);
+	PARAM_ACTION_PROLOGUE(AActor);
+
 	PARAM_INT(channel);
+
+	if (ACTION_CALL_FROM_PSPRITE())
+	{
+		DPSprite *pspr = self->player->FindPSprite(stateinfo->mPSPIndex);
+		if (pspr != nullptr && pspr->GetID() == PSP_OFFHANDWEAPON && channel == CHAN_WEAPON)
+			channel = CHAN_OFFWEAPON;
+	}
+
 	PARAM_FLOAT(volume);
 	S_ChangeActorSoundVolume(self, channel, volume);
 	return 0;
@@ -173,9 +194,18 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_SoundVolume, S_ChangeActorSoundVolume)
 
 DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_PlaySound, A_PlaySound)
 {
-	PARAM_SELF_PROLOGUE(AActor);
+	PARAM_ACTION_PROLOGUE(AActor);
 	PARAM_INT(soundid);
+
 	PARAM_INT(channel);
+
+	if (ACTION_CALL_FROM_PSPRITE())
+	{
+		DPSprite *pspr = self->player->FindPSprite(stateinfo->mPSPIndex);
+		if (pspr != nullptr && pspr->GetID() == PSP_OFFHANDWEAPON && channel == CHAN_WEAPON)
+			channel = CHAN_OFFWEAPON;
+	}
+
 	PARAM_FLOAT(volume);
 	PARAM_BOOL(looping);
 	PARAM_FLOAT(attenuation);
@@ -187,9 +217,18 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_PlaySound, A_PlaySound)
 
 DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_StartSound, A_StartSound)
 {
-	PARAM_SELF_PROLOGUE(AActor);
+	PARAM_ACTION_PROLOGUE(AActor);
 	PARAM_INT(soundid);
+
 	PARAM_INT(channel);
+
+	if (ACTION_CALL_FROM_PSPRITE())
+	{
+		DPSprite *pspr = self->player->FindPSprite(stateinfo->mPSPIndex);
+		if (pspr != nullptr && pspr->GetID() == PSP_OFFHANDWEAPON && channel == CHAN_WEAPON)
+			channel = CHAN_OFFWEAPON;
+	}
+
 	PARAM_INT(flags);
 	PARAM_FLOAT(volume);
 	PARAM_FLOAT(attenuation);
@@ -199,7 +238,6 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_StartSound, A_StartSound)
 	return 0;
 }
 
-
 void A_StartSoundIfNotSame(AActor *self, int soundid, int checksoundid, int channel, int flags, double volume, double attenuation, double pitch, double startTime)
 {
 	if (!S_AreSoundsEquivalent (self, FSoundID::fromInt(soundid), FSoundID::fromInt(checksoundid)))
@@ -208,7 +246,7 @@ void A_StartSoundIfNotSame(AActor *self, int soundid, int checksoundid, int chan
 
 DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_StartSoundIfNotSame, A_StartSoundIfNotSame)
 {
-	PARAM_SELF_PROLOGUE(AActor);
+	PARAM_ACTION_PROLOGUE(AActor);
 	PARAM_INT(soundid);
 	PARAM_INT(checksoundid);
 	PARAM_INT(channel);
@@ -217,6 +255,14 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, A_StartSoundIfNotSame, A_StartSoundIfNotSa
 	PARAM_FLOAT(attenuation);
 	PARAM_FLOAT(pitch);
 	PARAM_FLOAT(startTime);
+
+	if (ACTION_CALL_FROM_PSPRITE())
+	{
+		DPSprite *pspr = self->player->FindPSprite(stateinfo->mPSPIndex);
+		if (pspr != nullptr && pspr->GetID() == PSP_OFFHANDWEAPON && channel == CHAN_WEAPON)
+			channel = CHAN_OFFWEAPON;
+	}
+
 	A_StartSoundIfNotSame(self, soundid, checksoundid, channel, flags, volume, attenuation, pitch, startTime);
 	return 0;
 }
@@ -229,7 +275,7 @@ static int S_IsActorPlayingSomethingID(AActor* actor, int channel, int sound_id)
 
 DEFINE_ACTION_FUNCTION_NATIVE(AActor, IsActorPlayingSound, S_IsActorPlayingSomethingID)
 {
-	PARAM_SELF_PROLOGUE(AActor);
+	PARAM_ACTION_PROLOGUE(AActor);
 	PARAM_INT(channel);
 	PARAM_SOUND(soundid);
 	ACTION_RETURN_BOOL(S_IsActorPlayingSomething(self, channel, soundid));
@@ -369,7 +415,6 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, PitchFromVel, PitchFromVel)
 	ACTION_RETURN_FLOAT(PitchFromVel(self));
 }
 
-
 // This combines all 3 variations of the internal function
 static void VelFromAngle(AActor *self, double speed, double angle)
 {
@@ -380,7 +425,7 @@ static void VelFromAngle(AActor *self, double speed, double angle)
 	else
 	{
 		if (angle == 1e37)
-			
+
 		{
 			self->VelFromAngle(speed);
 		}
@@ -802,8 +847,6 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, GetSpawnHealth, SpawnHealth)
 	ACTION_RETURN_INT(self->SpawnHealth());
 }
 
-
-
 void Revive(AActor *self)
 {
 	self->Revive();
@@ -1109,7 +1152,7 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, TestMobjZ, P_TestMobjZ)
 {
 	PARAM_SELF_PROLOGUE(AActor);
 	PARAM_BOOL(quick);
-	
+
 	AActor *on = nullptr;
 	bool retv = P_TestMobjZ(self, quick, &on);
 	if (numret > 1) ret[1].SetObject(on);
@@ -1201,7 +1244,7 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, LineAttack, ZS_LineAttack)
 	PARAM_FLOAT(offsetz);
 	PARAM_FLOAT(offsetforward);
 	PARAM_FLOAT(offsetside);
-	
+
 	int acdmg;
 	auto puff = ZS_LineAttack(self, angle, distance, pitch, damage, damageType, puffType, flags, victim, offsetz, offsetforward, offsetside, &acdmg);
 	if (numret > 0) ret[0].SetObject(puff);
@@ -1244,7 +1287,6 @@ DEFINE_ACTION_FUNCTION(AActor, PerformShadowChecks)
 	return numret;
 }
 
-
 static void TraceBleedAngle(AActor *self, int damage, double angle, double pitch)
 {
 	P_TraceBleed(damage, self, DAngle::fromDeg(angle), DAngle::fromDeg(pitch));
@@ -1256,7 +1298,7 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, TraceBleedAngle, TraceBleedAngle)
 	PARAM_INT(damage);
 	PARAM_FLOAT(angle);
 	PARAM_FLOAT(pitch);
-	
+
 	P_TraceBleed(damage, self, DAngle::fromDeg(angle), DAngle::fromDeg(pitch));
 	return 0;
 }
@@ -1271,7 +1313,7 @@ DEFINE_ACTION_FUNCTION_NATIVE(_FTranslatedLineTarget, TraceBleed, TraceBleedTLT)
 	PARAM_SELF_STRUCT_PROLOGUE(FTranslatedLineTarget);
 	PARAM_INT(damage);
 	PARAM_OBJECT_NOT_NULL(missile, AActor);
-	
+
 	P_TraceBleed(damage, self, missile);
 	return 0;
 }
@@ -1481,7 +1523,7 @@ DEFINE_ACTION_FUNCTION_NATIVE(AActor, GetMissileDamage, ZS_GetMissileDamage)
 	PARAM_INT(pick_pointer);
 	ACTION_RETURN_INT(ZS_GetMissileDamage(self, mask, add, pick_pointer));
 }
-	
+
 DEFINE_ACTION_FUNCTION_NATIVE(AActor, SoundAlert, P_NoiseAlert)
 {
 	PARAM_SELF_PROLOGUE(AActor);
@@ -1874,8 +1916,6 @@ DEFINE_ACTION_FUNCTION(AActor, ReflectOffActor)
 	ACTION_RETURN_BOOL(P_ReflectOffActor(self, blocking));
 }
 
-
-
 static int isFrozen(AActor *self)
 {
 	return self->isFrozen();
@@ -2080,6 +2120,15 @@ DEFINE_FIELD(AActor, Poisoner)
 DEFINE_FIELD_NAMED(AActor, Inventory, Inv)		// clashes with type 'Inventory'.
 DEFINE_FIELD(AActor, smokecounter)
 DEFINE_FIELD(AActor, FriendPlayer)
+DEFINE_FIELD(AActor, OverrideAttackPosDir)
+DEFINE_FIELD(AActor, AttackPos)
+DEFINE_FIELD(AActor, AttackPitch)
+DEFINE_FIELD(AActor, AttackRoll)
+DEFINE_FIELD(AActor, AttackAngle)
+DEFINE_FIELD(AActor, OffhandPos)
+DEFINE_FIELD(AActor, OffhandPitch)
+DEFINE_FIELD(AActor, OffhandRoll)
+DEFINE_FIELD(AActor, OffhandAngle)
 DEFINE_FIELD(AActor, Translation)
 DEFINE_FIELD(AActor, AttackSound)
 DEFINE_FIELD(AActor, DeathSound)
