@@ -190,6 +190,7 @@ namespace cvar
     RT_CVAR( rt_static_ignore_polyobjects, true, "ignore external static scenes on maps with polyobjects, so moving walls and doors stay in live geometry" )
 
     RT_CVAR( rt_classic,                0.f,    "[0.0,1.0] what portion of the screen to render with a classic mode" )
+    RT_CVAR( rt_classic_stereo_offset,  0.15f,   "inward stereo correction for rt_classic split; normalized eye-width offset (left +, right -)" )
     RT_CVAR( rt_classic_mus,            true,   "if true, apply high pass filter to music when classic mode is enabled" )
     RT_CVAR( rt_classic_white,          3.0f,   "white point for classic renderer" )
     RT_CVAR( rt_classic_llmin,          0.07f,  "min light level: remaps a gzdoom sector light level from [0.0,1.0] range to [rt_classic_llMIN,rt_classic_llMAX]" )
@@ -1801,30 +1802,43 @@ private:
             } };
         };
 
-        // sky has view matrix that is different from main camera, apply it
+        // Keep the sky dome's required coordinate basis, but discard its positional
+        // component. The sky must rotate with the view while remaining infinitely
+        // distant, so room-scale head translation cannot move it.
         if( isSky )
         {
-            auto l_unit = []( float f ) {
-                return f > +0.5f   ? +1.0f //
-                       : f < -0.5f ? -1.0f //
-                                   : 0.0f;
-            };
+            if( !m_skyCameraBasisValid )
+            {
+                const auto skyToMainCameraSource =
+                    VSMatrix::smultMatrix( m_mainCameraView_Inverse, m_view );
+                const float* rotation = skyToMainCameraSource.get();
 
-            auto skyToMainCameraIrregular =
-                VSMatrix::smultMatrix( m_mainCameraView_Inverse, m_view );
-
-            const float* irr = skyToMainCameraIrregular.get();
-
-            const float skyToMainCamera[ 16 ] = {
-                l_unit( irr[ 0 ] ), l_unit( irr[ 1 ] ), l_unit( irr[ 2 ] ),  0,
-                l_unit( irr[ 4 ] ), l_unit( irr[ 5 ] ), l_unit( irr[ 6 ] ),  0,
-                l_unit( irr[ 8 ] ), l_unit( irr[ 9 ] ), l_unit( irr[ 10 ] ), 0,
-                irr[ 12 ],          irr[ 13 ],          irr[ 14 ],           1,
-            };
+                // This is a renderer-coordinate conversion, not a head-pose
+                // transform. Capture its fixed axis basis once so independently
+                // predicted classic and OpenXR poses cannot wobble the sky.
+                const auto nearestAxis = []( float value ) {
+                    return value > 0.5f ? 1.0f : value < -0.5f ? -1.0f : 0.0f;
+                };
+                const float basis[ 16 ] = {
+                    nearestAxis( rotation[ 0 ] ), nearestAxis( rotation[ 1 ] ), nearestAxis( rotation[ 2 ] ), 0,
+                    nearestAxis( rotation[ 4 ] ), nearestAxis( rotation[ 5 ] ), nearestAxis( rotation[ 6 ] ), 0,
+                    nearestAxis( rotation[ 8 ] ), nearestAxis( rotation[ 9 ] ), nearestAxis( rotation[ 10 ] ), 0,
+                    0,                            0,                            0,                             1,
+                };
+                std::memcpy( m_skyCameraBasis, basis, sizeof( basis ) );
+                m_skyCameraBasisValid = true;
+            }
             auto skyTransform = mModelMatrix;
             skyTransform.scale( 1, cvar::rt_sky_stretch, 1 );
+            float skyModel[ 16 ];
+            skyTransform.copy( skyModel );
+            // Sky geometry must not retain the camera/room-scale translation
+            // that the classic dome model may carry between head poses.
+            skyModel[ 12 ] = 0.0f;
+            skyModel[ 13 ] = 0.0f;
+            skyModel[ 14 ] = 0.0f;
 
-            auto t = VSMatrix::smultMatrix( skyToMainCamera, skyTransform.get() );
+            auto t = VSMatrix::smultMatrix( m_skyCameraBasis, skyModel );
             return fromGzMatrix( t.get() );
         }
 
@@ -2626,6 +2640,9 @@ private:
     float      m_view[ 16 ]{};
     float      m_projection[ 16 ]{};
 
+    mutable float m_skyCameraBasis[ 16 ]{};
+    mutable bool  m_skyCameraBasisValid{ false };
+
     float m_mainCameraView_Inverse[ 16 ]{};
     float m_mainCameraProjection_Inverse[ 16 ]{};
 
@@ -2829,7 +2846,7 @@ void RT_InitInstance(RgWin32SurfaceCreateInfo* win32Info, void* xlibDisplay, uns
         .rasterizedMaxVertexCount = 1 << 20, .rasterizedMaxIndexCount = 1 << 21,
         .rasterizedVertexColorGamma = true,
 
-        .rasterizedSkyCubemapSize = 256,
+        .rasterizedSkyCubemapSize = 512,
 
         .textureSamplerForceMinificationFilterLinear = true,
         .textureSamplerForceNormalMapFilterLinear    = true,
@@ -4424,6 +4441,7 @@ void RTFrameBuffer::RT_DrawFrame()
         .rayLength        = GetZFar() * ONEGAMEUNIT_IN_METERS,
         .presentPrevFrame = false,
         .currentTime      = curtime,
+        .stereoClassicSplitOffset = std::clamp( float( cvar::rt_classic_stereo_offset ), 0.0f, 0.49f ),
     };
 
     RgResult r = rt.rgDrawFrame( &info );

@@ -23,6 +23,7 @@ fmodapi*linux/
 *.user
 *.local
 *.log
+/docs/*.md
 
 # other / unknown
 *.ncb
